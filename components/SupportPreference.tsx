@@ -119,10 +119,15 @@ function ExpandingChoice({
 }): ReactElement {
   return (
     <div
+      onClick={event => {
+        // Padding lives on this card, outside the radio button.
+        if (event.target !== event.currentTarget) return
+        onSelect()
+      }}
       className={
         selected
-          ? 'lunchbot-option cursor-pointer overflow-hidden rounded-2xl border border-[#009900]/30 bg-[#009900]/10 p-3 transition-colors hover:border-[#009900]/55 has-[:active]:border-[#009900]'
-          : 'lunchbot-option cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-400 has-[:active]:border-zinc-500'
+          ? 'lunchbot-option cursor-pointer overflow-hidden rounded-2xl border border-[#009900]/30 bg-[#009900]/10 p-3 transition-colors hover:border-[#009900]/55 active:border-[#009900] has-[:active]:border-[#009900]'
+          : 'lunchbot-option cursor-pointer overflow-hidden rounded-2xl border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-400 active:border-zinc-500 has-[:active]:border-zinc-500'
       }
     >
       <Choice

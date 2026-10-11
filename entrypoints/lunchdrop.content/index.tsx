@@ -27,6 +27,17 @@ export default defineContentScript({
     let hidePrompts = false
     let observer: MutationObserver | null = null
 
+    window.addEventListener('message', event => {
+      if (event.source !== window || !isPolicyRequestMessage(event.data)) return
+      publishSupportPolicy(policy)
+    })
+
+    const publishStored = (next: SupportPolicy): void => {
+      policy = next
+      publishSupportPolicy(next)
+    }
+    void readSupportPolicy().then(publishStored)
+
     const ui = await createShadowRootUi(ctx, {
       name: 'lunchdrop-plus-support',
       position: 'modal',
@@ -51,11 +62,6 @@ export default defineContentScript({
       },
     })
 
-    window.addEventListener('message', event => {
-      if (event.source !== window || !isPolicyRequestMessage(event.data)) return
-      publishSupportPolicy(policy)
-    })
-
     browser.storage.onChanged.addListener(changes => {
       const policyChange = changes[SUPPORT_POLICY_STORAGE_KEY]
       if (policyChange !== undefined) {
@@ -68,11 +74,6 @@ export default defineContentScript({
       syncMiscPrompts(hidePrompts)
     })
 
-    const publishStored = (next: SupportPolicy): void => {
-      policy = next
-      publishSupportPolicy(next)
-    }
-    void readSupportPolicy().then(publishStored)
     void readHidePagePrompts().then(value => {
       hidePrompts = value
       syncMiscPrompts(hidePrompts)

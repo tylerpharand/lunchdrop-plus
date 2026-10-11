@@ -27,7 +27,7 @@ Availability alerts are a separate project. Nothing in this repo signs in on the
 
 **Support fee.** The order row is labeled "Support:". Clicking the price opens a modal titled "Support" instead of Lunchdrop's editor. The same preference is in the toolbar popup.
 
-**Settings.** The support preference, plus one switch that hides reminder, rating, referral, and invite banners. Order updates stay visible. That switch is off unless the user turns it on.
+**Settings.** The toolbar popup is headed "Lunchdrop+" and groups settings into Support, UI, and Misc tabs. A subdued GitHub mark at the right of that heading opens the public repository. Support is the fee preference. UI is one switch that hides reminder, rating, referral, and invite banners. Order updates stay visible. That switch is off unless the user turns it on.
 
 **Browsers.** Chrome and Firefox on desktop. Firefox for Android can run extensions; Chrome on Android generally cannot.
 
