@@ -1,8 +1,11 @@
 import { useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
+import { browser } from 'wxt/browser'
 import { HidePromptsSetting } from '../../components/HidePromptsSetting'
 import { SupportPreference } from '../../components/SupportPreference'
 import { useHidePagePrompts } from '../../components/use-hide-page-prompts'
 import { useSupportPolicy } from '../../components/use-support-policy'
+
+const extensionVersion = browser.runtime.getManifest().version
 
 const TABS = [
   { id: 'support', label: 'Support' },
@@ -40,7 +43,9 @@ export default function App(): ReactElement {
   return (
     <main className="bg-white p-4 font-sans text-zinc-900 antialiased">
       <header className="flex items-center justify-between">
-        <h1 className="text-base font-semibold tracking-tight">Lunchdrop+</h1>
+        <h1 className="text-base font-semibold tracking-tight">
+          Lunchdrop+ <span className="font-normal text-zinc-400">({extensionVersion})</span>
+        </h1>
         <a
           href="https://github.com/tylerpharand/lunchdrop-plus"
           target="_blank"
