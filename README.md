@@ -6,5 +6,5 @@
 
 Quality of life improvements for [Lunchdrop](https://lunchdrop.com/).
 
-- 💸 Custom support amounts
-- 🧹 Hide the annoying prompts
+- 💵 Default support amounts
+- 🎨 UI Tweaks
