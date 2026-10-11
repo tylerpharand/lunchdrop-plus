@@ -4,7 +4,7 @@
 
 <h1 align="center">Lunchdrop+</h1>
 
-Quality of life improvements for Lunchdrop.
+Quality of life improvements for [Lunchdrop](https://lunchdrop.com/).
 
 - 💸 Custom support amounts
 - 🧹 Hide the annoying prompts
