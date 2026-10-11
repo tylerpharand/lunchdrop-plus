@@ -6,5 +6,7 @@
 
 Quality of life improvements for [Lunchdrop](https://lunchdrop.com/).
 
+Install on [Firefox](https://addons.mozilla.org/en-US/firefox/addon/lunchdropplus/).
+
 - 💵 Default support amounts
 - 🎨 UI Tweaks

@@ -1,8 +1,11 @@
-import { useEffect, useState, type MouseEvent, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactElement } from 'react'
 import {
   formatDollars,
+  parseSupportAmount,
   quotedSupportFee,
   SUPPORT_PERCENT_CHOICES,
+  type OrderSupportChoice,
+  type SupportChoiceMode,
   type SupportPolicy,
   type SupportQuote,
 } from '../lib/support-policy'
@@ -15,21 +18,47 @@ function releaseMouseFocus(event: MouseEvent<HTMLButtonElement>): void {
   if (event.detail > 0) event.currentTarget.blur()
 }
 
-interface SupportPreferenceProps {
+interface SupportStatus {
+  pendingMode?: SupportChoiceMode | null
+  confirmed?: { mode: SupportChoiceMode; tick: number } | null
+}
+
+interface PopupPreferenceProps extends SupportStatus {
+  variant?: 'popup'
   policy: SupportPolicy
   quote: SupportQuote | null
-  pendingMode?: SupportPolicy['mode'] | null
-  confirmed?: { mode: SupportPolicy['mode']; tick: number } | null
   onChange: (policy: SupportPolicy) => void
 }
 
-export function SupportPreference({
+export interface OrderPreferenceProps extends SupportStatus {
+  variant: 'order'
+  selection: {
+    choice: OrderSupportChoice | null
+    percent: number
+    customAmount: string
+  }
+  quote: SupportQuote | null
+  customFocusToken: number
+  onChoice: (choice: OrderSupportChoice) => void
+  onPercent: (percent: number) => void
+  onCustomAmount: (value: string) => void
+  onCustomCommit: () => void
+}
+
+export function SupportPreference(
+  props: PopupPreferenceProps | OrderPreferenceProps
+): ReactElement {
+  if (props.variant === 'order') return <OrderSupportPreference {...props} />
+  return <PopupSupportPreference {...props} />
+}
+
+function PopupSupportPreference({
   policy,
   quote,
   pendingMode = null,
   confirmed = null,
   onChange,
-}: SupportPreferenceProps): ReactElement {
+}: PopupPreferenceProps): ReactElement {
   const select = (mode: SupportPolicy['mode']): void => {
     onChange({ ...policy, mode })
   }
@@ -53,25 +82,19 @@ export function SupportPreference({
           select('default')
         }}
       />
-      <ExpandingChoice
+      <PercentChoice
         selected={policy.mode === 'percent'}
-        title="Percentage"
-        detail="A share of the item subtotal, before tax."
+        percent={policy.percent}
         amount={policy.mode === 'percent' ? amount('percent') : null}
         pending={pendingMode === 'percent'}
         done={confirmed?.mode === 'percent' ? confirmed.tick : 0}
         onSelect={() => {
           select('percent')
         }}
-      >
-        <PercentEditor
-          revealed={policy.mode === 'percent'}
-          percent={policy.percent}
-          onChange={percent => {
-            onChange({ ...policy, mode: 'percent', percent })
-          }}
-        />
-      </ExpandingChoice>
+        onPercent={percent => {
+          onChange({ ...policy, mode: 'percent', percent })
+        }}
+      />
       <Choice
         selected={policy.mode === 'remaining'}
         title="Remaining subsidy"
@@ -85,7 +108,7 @@ export function SupportPreference({
       />
       <Choice
         selected={policy.mode === 'skip'}
-        title="Skip"
+        title="None"
         detail="Always $0, even when subsidy is left."
         amount={amount('skip')}
         pending={pendingMode === 'skip'}
@@ -94,6 +117,172 @@ export function SupportPreference({
           select('skip')
         }}
       />
+    </div>
+  )
+}
+
+function OrderSupportPreference({
+  selection,
+  quote,
+  pendingMode = null,
+  confirmed = null,
+  customFocusToken,
+  onChoice,
+  onPercent,
+  onCustomAmount,
+  onCustomCommit,
+}: OrderPreferenceProps): ReactElement {
+  const amount = (
+    mode: 'percent' | 'remaining' | 'skip',
+    percent = selection.percent
+  ): string | null => {
+    if (quote === null) return null
+    const fee = quotedSupportFee(mode, percent, quote)
+    return fee === null ? null : formatDollars(fee)
+  }
+  const parsedCustom = parseSupportAmount(selection.customAmount)
+  const customPreview =
+    selection.choice === 'custom' || parsedCustom === null ? null : formatDollars(parsedCustom)
+
+  return (
+    <div role="radiogroup" aria-label="How much support to add" className="flex flex-col gap-2">
+      <style>{CONTROL_FOCUS + CHIP_MOTION + STATUS_MOTION}</style>
+      <ExpandingChoice
+        selected={selection.choice === 'custom'}
+        title="Custom"
+        detail="A dollar amount for this order."
+        amount={customPreview}
+        pending={pendingMode === 'custom'}
+        done={confirmed?.mode === 'custom' ? confirmed.tick : 0}
+        onSelect={() => {
+          onChoice('custom')
+        }}
+      >
+        <CustomAmountEditor
+          revealed={selection.choice === 'custom'}
+          amount={selection.customAmount}
+          focusToken={customFocusToken}
+          onAmount={onCustomAmount}
+          onCommit={onCustomCommit}
+        />
+      </ExpandingChoice>
+      <PercentChoice
+        selected={selection.choice === 'percent'}
+        percent={selection.percent}
+        amount={selection.choice === 'percent' ? amount('percent') : null}
+        pending={pendingMode === 'percent'}
+        done={confirmed?.mode === 'percent' ? confirmed.tick : 0}
+        onSelect={() => {
+          onChoice('percent')
+        }}
+        onPercent={onPercent}
+      />
+      <Choice
+        selected={selection.choice === 'remaining'}
+        title="Remaining subsidy"
+        detail="Use the entire remaining subsidy."
+        amount={amount('remaining')}
+        pending={pendingMode === 'remaining'}
+        done={confirmed?.mode === 'remaining' ? confirmed.tick : 0}
+        onSelect={() => {
+          onChoice('remaining')
+        }}
+      />
+      <Choice
+        selected={selection.choice === 'skip'}
+        title="None"
+        detail="Always $0, even when subsidy is left."
+        amount={amount('skip')}
+        pending={pendingMode === 'skip'}
+        done={confirmed?.mode === 'skip' ? confirmed.tick : 0}
+        onSelect={() => {
+          onChoice('skip')
+        }}
+      />
+    </div>
+  )
+}
+
+function PercentChoice({
+  selected,
+  percent,
+  amount,
+  pending,
+  done,
+  onSelect,
+  onPercent,
+}: {
+  selected: boolean
+  percent: number
+  amount: string | null
+  pending: boolean
+  done: number
+  onSelect: () => void
+  onPercent: (percent: number) => void
+}): ReactElement {
+  return (
+    <ExpandingChoice
+      selected={selected}
+      title="Percentage"
+      detail="A share of the item subtotal, before tax."
+      amount={amount}
+      pending={pending}
+      done={done}
+      onSelect={onSelect}
+    >
+      <PercentEditor revealed={selected} percent={percent} onChange={onPercent} />
+    </ExpandingChoice>
+  )
+}
+
+function CustomAmountEditor({
+  revealed,
+  amount,
+  focusToken,
+  onAmount,
+  onCommit,
+}: {
+  revealed: boolean
+  amount: string
+  focusToken: number
+  onAmount: (value: string) => void
+  onCommit: () => void
+}): ReactElement {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const animate = useSwitchMotion(revealed)
+  useEffect(() => {
+    if (!revealed || focusToken === 0) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [focusToken, revealed])
+
+  return (
+    <div className="pt-3">
+      <label
+        className={`flex items-center gap-1 rounded-xl bg-white px-3 py-2 ring-1 ring-zinc-200 focus-within:ring-[#009900] ${
+          animate && revealed ? 'lunchbot-chip-in' : ''
+        } ${animate && !revealed ? 'lunchbot-chip-out' : ''} ${!animate && !revealed ? 'opacity-0' : ''}`}
+      >
+        <span className="text-sm font-semibold text-zinc-500" aria-hidden="true">
+          $
+        </span>
+        <input
+          ref={inputRef}
+          value={amount}
+          inputMode="decimal"
+          autoComplete="off"
+          aria-label="Custom support amount"
+          onChange={event => {
+            onAmount(event.target.value)
+          }}
+          onBlur={onCommit}
+          onKeyDown={event => {
+            if (event.key !== 'Enter') return
+            event.currentTarget.blur()
+          }}
+          className="w-full bg-transparent text-sm font-semibold text-zinc-900 tabular-nums outline-none"
+        />
+      </label>
     </div>
   )
 }
@@ -317,7 +506,7 @@ function Mark({ selected }: { selected: boolean }): ReactElement {
   )
 }
 
-function useSwitchMotion(active: boolean): boolean {
+export function useSwitchMotion(active: boolean): boolean {
   const [settled, setSettled] = useState(active)
   const [armed, setArmed] = useState(false)
   if (settled !== active) {

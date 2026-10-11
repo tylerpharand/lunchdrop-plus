@@ -10,7 +10,8 @@ Usage: yarn release <version> [--dry-run]
 
 The release checks origin and gh auth, requires a clean worktree, sets the
 package.json version, runs yarn verify, zips Chrome and Firefox, commits that
-version, pushes, and creates GitHub release v<version> with both zips.
+version, pushes, and creates GitHub release v<version> with both zips. The
+Firefox Add-on workflow then submits the Firefox build to addons.mozilla.org.
 
 --dry-run builds the zips and leaves package.json unchanged.
 EOF
@@ -179,9 +180,9 @@ if ! git push -u origin HEAD; then
 fi
 
 NOTES="$(cat <<EOF
-Chrome and Firefox packages for manual install.
+Chrome package for manual install. The Firefox zip is the build submitted to addons.mozilla.org. The signed package is attached when signing finishes.
 
-These files do not auto-update. Publish on the Chrome Web Store (unlisted is enough) for Chrome and Arc updates, and on addons.mozilla.org for Firefox updates.
+These files do not auto-update. Chrome and Arc update from the Chrome Web Store, including an unlisted listing. Each release submits the Firefox build to addons.mozilla.org as an unlisted add-on.
 EOF
 )"
 
@@ -197,3 +198,4 @@ if ! gh release create "$TAG" \
 fi
 
 echo "Published ${TAG}"
+echo "Firefox submission to addons.mozilla.org runs from the Publish Firefox add-on workflow."

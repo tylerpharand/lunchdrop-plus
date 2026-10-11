@@ -10,6 +10,7 @@ import {
   parseJson,
   parsePlacedOrder,
   placeOrderDeliveryId,
+  publishSupportOrigin,
   subsidyRemainingForOrder,
   subsidySnapshotFromDay,
   type OrderSupportContext,
@@ -183,6 +184,7 @@ async function settlePlacedOrder(
   const raw = parseJson(rawText)
   const order = parsePlacedOrder(raw)
   if (order === null) return null
+  publishSupportOrigin(order.id, order.supportFee)
 
   const subsidy = policy.mode === 'remaining' ? readSubsidySnapshot(order) : null
   if (policy.mode === 'remaining' && subsidy === null) {

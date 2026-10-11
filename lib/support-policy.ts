@@ -9,6 +9,11 @@ export interface SupportPolicy {
   percent: number
 }
 
+/** Choices on an open order. Custom is a dollar amount for that order only. */
+export type OrderSupportChoice = 'custom' | 'percent' | 'remaining' | 'skip'
+
+export type SupportChoiceMode = SupportPolicy['mode'] | 'custom'
+
 export interface SubsidySnapshot {
   cap: number
   remaining: number
@@ -21,7 +26,9 @@ export interface OrderSupportContext {
 
 export interface SupportQuote {
   itemsSubtotal: number
-  baselineFee: number
+  baselineFee: number | null
+  /** False until we've checked whether this order's original fee was saved. */
+  baselineKnown: boolean
   subsidy: SubsidySnapshot | null
 }
 
@@ -126,6 +133,30 @@ export function orderSupportFromMessage(value: unknown): OrderSupportContext | u
   return { orders, subsidy: readSubsidySnapshot(value) }
 }
 
+export interface SupportOrigin {
+  orderId: string
+  supportFee: number
+}
+
+/** Lunchdrop's fee from the place-order response, before we replace it. */
+export function supportOriginFromMessage(value: unknown): SupportOrigin | null {
+  if (!isRecord(value)) return null
+  if (field(value, 'source') !== LUNCHBOT_SOURCE || field(value, 'type') !== 'support-origin') {
+    return null
+  }
+  const orderId = field(value, 'orderId')
+  const supportFee = readMoney(field(value, 'supportFee'))
+  if (typeof orderId !== 'string' || supportFee === null) return null
+  return { orderId, supportFee }
+}
+
+export function publishSupportOrigin(orderId: string, supportFee: number): void {
+  window.postMessage(
+    { source: LUNCHBOT_SOURCE, type: 'support-origin', orderId, supportFee },
+    window.location.origin
+  )
+}
+
 export function applySupportFromMessage(value: unknown): ApplySupportRequest | undefined {
   if (!isRecord(value)) return undefined
   if (field(value, 'source') !== LUNCHBOT_SOURCE || field(value, 'type') !== 'apply-support-fee') {
@@ -163,6 +194,73 @@ export function supportFeeResultFromMessage(value: unknown): SupportFeeResult | 
     amountDue: readMoney(field(value, 'amountDue')),
     tax: readMoney(field(value, 'tax')),
   }
+}
+
+export function feesMatch(left: number, right: number): boolean {
+  return Math.abs(left - right) < 0.001
+}
+
+/** Dollar to show when Custom is opened from another choice. */
+export function customSupportSeed(currentFee: number, quote: SupportQuote): number {
+  if (quote.baselineKnown && quote.baselineFee !== null) return quote.baselineFee
+  return currentFee
+}
+
+export function inferOrderSupport(
+  policy: SupportPolicy,
+  currentFee: number,
+  quote: SupportQuote
+): { choice: OrderSupportChoice; percent: number; remember: boolean } {
+  const percent = policy.percent
+  if (policy.mode === 'percent') {
+    const quoted = quotedSupportFee('percent', percent, quote)
+    if (quoted !== null && feesMatch(quoted, currentFee)) {
+      return { choice: 'percent', percent, remember: true }
+    }
+  }
+  if (policy.mode === 'remaining') {
+    const quoted = quotedSupportFee('remaining', percent, quote)
+    if (quoted !== null && feesMatch(quoted, currentFee)) {
+      return { choice: 'remaining', percent, remember: true }
+    }
+  }
+  if (policy.mode === 'skip' && feesMatch(0, currentFee)) {
+    return { choice: 'skip', percent, remember: true }
+  }
+  if (feesMatch(0, currentFee)) return { choice: 'skip', percent, remember: false }
+  const remaining = quote.subsidy?.remaining ?? null
+  if (remaining !== null && remaining > 0 && feesMatch(remaining, currentFee)) {
+    return { choice: 'remaining', percent, remember: false }
+  }
+  for (const choice of SUPPORT_PERCENT_CHOICES) {
+    const quoted = quotedSupportFee('percent', choice, quote)
+    if (quoted !== null && feesMatch(quoted, currentFee)) {
+      return { choice: 'percent', percent: choice, remember: false }
+    }
+  }
+  return { choice: 'custom', percent, remember: false }
+}
+
+export function orderChoiceMatchesPolicy(
+  choice: OrderSupportChoice,
+  percent: number,
+  policy: SupportPolicy
+): boolean {
+  if (choice === 'percent') return policy.mode === 'percent' && policy.percent === percent
+  if (choice === 'custom') return false
+  return policy.mode === choice
+}
+
+export function parseSupportAmount(value: string): number | null {
+  const trimmed = value.trim().replace(/^\$/, '')
+  if (!/^\d+(?:\.\d*)?$/.test(trimmed)) return null
+  const amount = Number(trimmed)
+  if (!Number.isFinite(amount) || amount < 0 || amount > 999.99) return null
+  return roundMoney(amount)
+}
+
+export function formatSupportAmount(value: number): string {
+  return roundMoney(value).toFixed(2)
 }
 
 export function quotedSupportFee(
@@ -254,7 +352,7 @@ export function parsePlacedOrder(value: unknown): PlacedOrder | null {
 /**
  * Fee to send, or null when the placed order should be left alone.
  * Percentage ignores the subsidy. Remaining subsidy is the unused cap, or $0
- * when the day is maxed. Skip is always $0.
+ * when the day is maxed. None is always $0.
  */
 export function desiredSupportFee(
   order: PlacedOrder,

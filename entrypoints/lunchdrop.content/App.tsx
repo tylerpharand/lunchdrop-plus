@@ -2,18 +2,31 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { SupportModal } from '../../components/SupportModal'
 import { useSupportPolicy } from '../../components/use-support-policy'
 import {
+  customSupportSeed,
+  feesMatch,
   formatDollars,
+  formatSupportAmount,
+  inferOrderSupport,
   LUNCHBOT_SOURCE,
+  orderChoiceMatchesPolicy,
   orderSupportFromMessage,
+  parseSupportAmount,
   quotedSupportFee,
   supportFeeResultFromMessage,
+  type OrderSupportChoice,
   type OrderSupportContext,
   type PlacedOrder,
-  type SupportPolicy,
+  type SupportChoiceMode,
   type SupportQuote,
 } from '../../lib/support-policy'
-import { readSupportBaseline, rememberSupportBaseline } from '../../lib/support-policy-storage'
+import { readSupportOrigin } from '../../lib/support-policy-storage'
 import { onSupportModalOpen } from './open'
+
+interface SelectionSnap {
+  choice: OrderSupportChoice | null
+  percent: number
+  customAmount: string
+}
 
 interface PageAppProps {
   onOpenChange: (open: boolean) => void
@@ -22,15 +35,19 @@ interface PageAppProps {
 export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | null {
   const { policy, setPolicy } = useSupportPolicy()
   const [open, setOpen] = useState(false)
-  const [remember, setRemember] = useState(true)
-  const [draft, setDraft] = useState<SupportPolicy | null>(null)
+  const [remember, setRemember] = useState(false)
+  const [choice, setChoice] = useState<OrderSupportChoice | null>(null)
+  const [percent, setPercent] = useState(10)
+  const [customAmount, setCustomAmount] = useState('')
+  const [customFocusToken, setCustomFocusToken] = useState(0)
   const [supportLabel, setSupportLabel] = useState('')
   const [context, setContext] = useState<OrderSupportContext | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [baseline, setBaseline] = useState<number | null>(null)
-  const [pendingMode, setPendingMode] = useState<SupportPolicy['mode'] | null>(null)
+  const [baselineKnown, setBaselineKnown] = useState(false)
+  const [pendingMode, setPendingMode] = useState<SupportChoiceMode | null>(null)
   const [confirmed, setConfirmed] = useState<{
-    mode: SupportPolicy['mode']
+    mode: SupportChoiceMode
     tick: number
   } | null>(null)
   const confirmTick = useRef(0)
@@ -39,9 +56,10 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
   const serverFee = useRef<number | null>(null)
   const pinnedOrderId = useRef<string | null>(null)
   const policyRef = useRef(policy)
-  const openedPolicy = useRef(policy)
-  const rememberRef = useRef(true)
   const selectionEdited = useRef(false)
+  const lastValidCustom = useRef('')
+  const burstPrevious = useRef<SelectionSnap | null>(null)
+  const ignoreCustomCommit = useRef(false)
 
   useEffect(() => {
     onOpenChange(open)
@@ -53,15 +71,19 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
         pinnedOrderId.current = null
         serverFee.current = null
         applyGeneration.current = 0
-        openedPolicy.current = policyRef.current
         selectionEdited.current = false
-        rememberRef.current = true
-        setRemember(true)
-        setDraft(null)
+        lastValidCustom.current = ''
+        burstPrevious.current = null
+        ignoreCustomCommit.current = false
+        setRemember(false)
+        setChoice(null)
+        setPercent(policyRef.current.percent)
+        setCustomAmount('')
         setPendingMode(null)
         setOrderId(null)
         setSupportLabel(label)
         setBaseline(null)
+        setBaselineKnown(false)
         setOpen(true)
       }),
     []
@@ -80,10 +102,18 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
       pinnedOrderId.current = id
       setOrderId(id)
       setContext(next)
-      if (id === null) return
-      const liveFee = next.orders.find(item => item.id === id)?.supportFee ?? null
-      void readSupportBaseline(id).then(stored => {
-        setBaseline(stored ?? liveFee)
+      if (id === null) {
+        setBaseline(null)
+        setBaselineKnown(true)
+        return
+      }
+      if (id === current) return
+      setBaseline(null)
+      setBaselineKnown(false)
+      void readSupportOrigin(id).then(stored => {
+        if (pinnedOrderId.current !== id) return
+        setBaseline(stored)
+        setBaselineKnown(true)
       })
     }
     window.addEventListener('message', onMessage)
@@ -94,9 +124,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
 
   useEffect(() => {
     policyRef.current = policy
-    if (!open || selectionEdited.current) return
-    openedPolicy.current = policy
-  }, [open, policy])
+  }, [policy])
 
   useEffect(() => {
     if (!open) return
@@ -118,41 +146,75 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
       ? null
       : (context.orders.find(item => item.id === orderId) ??
         pickOrder(context.orders, supportLabel, null))
+  const subsidyRemaining = context?.subsidy?.remaining ?? null
+  const subsidyCap = context?.subsidy?.cap ?? null
+
+  useEffect(() => {
+    if (!open || order === null || !baselineKnown || selectionEdited.current) return
+    const liveQuote: SupportQuote = {
+      itemsSubtotal: order.itemsSubtotal,
+      baselineFee: baseline,
+      baselineKnown: true,
+      subsidy:
+        subsidyCap === null || subsidyRemaining === null
+          ? null
+          : { cap: subsidyCap, remaining: subsidyRemaining },
+    }
+    const currentFee = serverFee.current ?? order.supportFee
+    const next = inferOrderSupport(policy, currentFee, liveQuote)
+    const fieldAmount =
+      next.choice === 'custom' ? currentFee : customSupportSeed(currentFee, liveQuote)
+    const formatted = formatSupportAmount(fieldAmount)
+    lastValidCustom.current = formatted
+    setChoice(next.choice)
+    setPercent(next.percent)
+    setRemember(next.remember)
+    setCustomAmount(formatted)
+  }, [open, order, baseline, baselineKnown, policy, subsidyCap, subsidyRemaining])
 
   if (!open) return null
 
   const quote: SupportQuote | null =
-    order !== null && baseline !== null
-      ? {
+    order === null
+      ? null
+      : {
           itemsSubtotal: order.itemsSubtotal,
           baselineFee: baseline,
+          baselineKnown,
           subsidy: context?.subsidy ?? null,
         }
-      : null
 
-  const runApply = (next: SupportPolicy, previous: SupportPolicy): void => {
-    if (order?.deliveryId === undefined) return
+  const snap = (): SelectionSnap => ({ choice, percent, customAmount })
+
+  const postFee = (fee: number, next: SelectionSnap, previous: SelectionSnap): void => {
+    if (next.choice === null || order?.deliveryId === undefined) return
+    const pendingChoice = next.choice
     const currentFee = serverFee.current ?? order.supportFee
-    const fee = quotedFeeToPost(order, quote, next, currentFee)
-    if (fee === null) return
+    if (feesMatch(fee, currentFee)) return
     const generation = applyGeneration.current + 1
     applyGeneration.current = generation
     const previousFee = currentFee
     serverFee.current = fee
-    setPendingMode(next.mode)
+    setPendingMode(pendingChoice)
+    const deliveryId = order.deliveryId
     const task = (async (): Promise<void> => {
       try {
-        const outcome = await applySupportChoice(order, quote, next, previousFee)
+        const ok = await postSupportFee(order.id, deliveryId, fee)
         if (applyGeneration.current !== generation) return
-        if (outcome !== 'applied') serverFee.current = previousFee
-        if (outcome === 'applied') {
-          confirmTick.current += 1
-          setConfirmed({ mode: next.mode, tick: confirmTick.current })
+        if (!ok) {
+          serverFee.current = previousFee
+          setChoice(previous.choice)
+          setPercent(previous.percent)
+          setCustomAmount(previous.customAmount)
+          lastValidCustom.current = previous.customAmount
+          setRemember(
+            previous.choice !== null &&
+              orderChoiceMatchesPolicy(previous.choice, previous.percent, policyRef.current)
+          )
+          return
         }
-        if (outcome === 'failed') {
-          setDraft(previous)
-          if (rememberRef.current) setPolicy(previous)
-        }
+        confirmTick.current += 1
+        setConfirmed({ mode: pendingChoice, tick: confirmTick.current })
       } finally {
         if (applyGeneration.current === generation) setPendingMode(null)
       }
@@ -160,55 +222,135 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
     void task
   }
 
-  const shown = draft ?? policy
+  const schedulePreset = (
+    nextChoice: 'percent' | 'remaining' | 'skip',
+    nextPercent: number,
+    previous: SelectionSnap
+  ): void => {
+    const continuing =
+      nextChoice === 'percent' && choice === 'percent' && applyTimer.current !== null
+    if (!continuing) burstPrevious.current = previous
+    if (applyTimer.current !== null) window.clearTimeout(applyTimer.current)
+    const delay = nextChoice === 'percent' && choice === 'percent' ? 400 : 0
+    applyTimer.current = window.setTimeout(() => {
+      applyTimer.current = null
+      const revertTo = burstPrevious.current ?? previous
+      burstPrevious.current = null
+      if (quote === null) return
+      const fee = quotedSupportFee(nextChoice, nextPercent, quote)
+      if (fee === null) return
+      postFee(fee, { choice: nextChoice, percent: nextPercent, customAmount }, revertTo)
+    }, delay)
+  }
 
-  const onChange = (next: SupportPolicy): void => {
+  const onChoice = (nextChoice: OrderSupportChoice): void => {
     if (order !== null) {
       pinnedOrderId.current = order.id
       setOrderId(order.id)
     }
-    const previous = shown
     selectionEdited.current = true
-    setDraft(next)
-    if (rememberRef.current) setPolicy(next)
-    if (applyTimer.current !== null) window.clearTimeout(applyTimer.current)
-    const delay = next.mode === 'percent' && shown.mode === 'percent' ? 400 : 0
-    applyTimer.current = window.setTimeout(() => {
-      applyTimer.current = null
-      runApply(next, previous)
-    }, delay)
+    const previous = snap()
+    if (nextChoice === 'custom') {
+      if (applyTimer.current !== null) {
+        window.clearTimeout(applyTimer.current)
+        applyTimer.current = null
+        burstPrevious.current = null
+      }
+      if (choice !== 'custom' && quote !== null && order !== null) {
+        const formatted = formatSupportAmount(
+          customSupportSeed(serverFee.current ?? order.supportFee, quote)
+        )
+        lastValidCustom.current = formatted
+        setCustomAmount(formatted)
+      }
+      setChoice('custom')
+      setRemember(false)
+      setCustomFocusToken(token => token + 1)
+      return
+    }
+    setChoice(nextChoice)
+    setRemember(orderChoiceMatchesPolicy(nextChoice, percent, policy))
+    schedulePreset(nextChoice, percent, previous)
   }
 
-  const close = (): void => {
+  const onPercent = (nextPercent: number): void => {
+    if (order !== null) {
+      pinnedOrderId.current = order.id
+      setOrderId(order.id)
+    }
+    selectionEdited.current = true
+    const previous = snap()
+    setChoice('percent')
+    setPercent(nextPercent)
+    setRemember(orderChoiceMatchesPolicy('percent', nextPercent, policy))
+    schedulePreset('percent', nextPercent, previous)
+  }
+
+  const onCustomAmount = (value: string): void => {
+    selectionEdited.current = true
+    setCustomAmount(value)
+  }
+
+  const commitCustom = (): void => {
+    if (ignoreCustomCommit.current || choice !== 'custom' || order === null) return
+    const fee = parseSupportAmount(customAmount)
+    if (fee === null) {
+      setCustomAmount(lastValidCustom.current)
+      return
+    }
+    const formatted = formatSupportAmount(fee)
+    lastValidCustom.current = formatted
+    if (formatted !== customAmount) setCustomAmount(formatted)
+    postFee(fee, { choice: 'custom', percent, customAmount: formatted }, snap())
+  }
+
+  const close = (reason: 'done' | 'dismiss'): void => {
     if (applyTimer.current !== null) {
       window.clearTimeout(applyTimer.current)
       applyTimer.current = null
-      runApply(shown, shown)
+      const revertTo = burstPrevious.current ?? snap()
+      burstPrevious.current = null
+      if (quote !== null && (choice === 'percent' || choice === 'remaining' || choice === 'skip')) {
+        const fee = quotedSupportFee(choice, percent, quote)
+        if (fee !== null) postFee(fee, { choice, percent, customAmount }, revertTo)
+      }
     }
+    if (reason === 'done' && choice === 'custom') commitCustom()
+    ignoreCustomCommit.current = true
     setOpen(false)
   }
 
   const onRememberChange = (next: boolean): void => {
-    rememberRef.current = next
+    if (choice === null || choice === 'custom') return
+    selectionEdited.current = true
     setRemember(next)
-    const current = draft ?? policy
     if (next) {
-      setPolicy(current)
+      setPolicy(
+        choice === 'percent'
+          ? { mode: 'percent', percent }
+          : { mode: choice, percent: policy.percent }
+      )
       return
     }
-    setDraft(current)
-    setPolicy(openedPolicy.current)
+    if (orderChoiceMatchesPolicy(choice, percent, policy)) {
+      setPolicy({ mode: 'default', percent: policy.percent })
+    }
   }
 
   return (
     <SupportModal
-      policy={shown}
+      selection={{ choice, percent, customAmount }}
       quote={quote}
       live={order !== null}
       pendingMode={pendingMode}
       confirmed={confirmed}
       remember={remember}
-      onChange={onChange}
+      showRemember={choice === 'percent' || choice === 'remaining' || choice === 'skip'}
+      customFocusToken={customFocusToken}
+      onChoice={onChoice}
+      onPercent={onPercent}
+      onCustomAmount={onCustomAmount}
+      onCustomCommit={commitCustom}
       onRememberChange={onRememberChange}
       onClose={close}
     />
@@ -225,33 +367,6 @@ function pickOrder(
   const labeled = orders.find(item => formatDollars(item.supportFee) === supportLabel.trim())
   if (labeled !== undefined) return labeled
   return orders.length === 1 ? (orders[0] ?? null) : null
-}
-
-type ApplyOutcome = 'unchanged' | 'applied' | 'failed'
-
-function quotedFeeToPost(
-  order: PlacedOrder | null,
-  quote: SupportQuote | null,
-  policy: SupportPolicy,
-  currentFee: number
-): number | null {
-  if (order?.deliveryId === undefined || quote === null) return null
-  const fee = quotedSupportFee(policy.mode, policy.percent, quote)
-  if (fee === null || Math.abs(fee - currentFee) < 0.001) return null
-  return fee
-}
-
-async function applySupportChoice(
-  order: PlacedOrder,
-  quote: SupportQuote | null,
-  policy: SupportPolicy,
-  currentFee: number
-): Promise<ApplyOutcome> {
-  const fee = quotedFeeToPost(order, quote, policy, currentFee)
-  if (fee === null || order.deliveryId === undefined) return 'unchanged'
-  await rememberSupportBaseline(order.id, currentFee)
-  const ok = await postSupportFee(order.id, order.deliveryId, fee)
-  return ok ? 'applied' : 'failed'
 }
 
 function postSupportFee(orderId: string, deliveryId: string, supportFee: number): Promise<boolean> {

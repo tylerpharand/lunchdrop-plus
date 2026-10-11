@@ -1,0 +1,59 @@
+name: Publish Firefox add-on
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          npm install -g yarn@1.22.17
+          HUSKY=0 yarn install --frozen-lockfile
+
+      - name: Build Firefox package
+        run: yarn zip:firefox
+
+      - name: Submit to addons.mozilla.org
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+        run: |
+          if [[ -z "${WEB_EXT_API_KEY}" || -z "${WEB_EXT_API_SECRET}" ]]; then
+            echo "Set repository secrets WEB_EXT_API_KEY and WEB_EXT_API_SECRET." >&2
+            echo "Create them at https://addons.mozilla.org/developers/addon/api/key/" >&2
+            exit 1
+          fi
+          version="$(node -p "require('./package.json').version")"
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs"
+            const notes = readFileSync("scripts/amo-approval-notes.md", "utf8").trim()
+            writeFileSync(
+              ".output/amo-metadata.json",
+              JSON.stringify({ version: { approval_notes: notes } }),
+            )
+          '
+          yarn web-ext sign \
+            --source-dir .output/firefox-mv3 \
+            --artifacts-dir .output/amo \
+            --channel unlisted \
+            --upload-source-code ".output/lunchdrop-plus-${version}-sources.zip" \
+            --amo-metadata .output/amo-metadata.json
+
+      - name: Attach signed package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" .output/amo/*.xpi

@@ -3,11 +3,13 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root'
 import {
   isPolicyRequestMessage,
   parseSupportPolicy,
+  supportOriginFromMessage,
   type SupportPolicy,
 } from '../../lib/support-policy'
 import {
   publishSupportPolicy,
   readSupportPolicy,
+  rememberSupportOrigin,
   SUPPORT_POLICY_STORAGE_KEY,
 } from '../../lib/support-policy-storage'
 import {
@@ -32,8 +34,11 @@ export default defineContentScript({
     let observer: MutationObserver | null = null
 
     window.addEventListener('message', event => {
-      if (event.source !== window || !isPolicyRequestMessage(event.data)) return
-      publishSupportPolicy(policy)
+      if (event.source !== window) return
+      if (isPolicyRequestMessage(event.data)) publishSupportPolicy(policy)
+      const origin = supportOriginFromMessage(event.data)
+      if (origin === null) return
+      void rememberSupportOrigin(origin.orderId, origin.supportFee)
     })
 
     const publishStored = (next: SupportPolicy): void => {

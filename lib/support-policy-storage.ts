@@ -12,25 +12,26 @@ export async function writeSupportPolicy(policy: SupportPolicy): Promise<void> {
   await browser.storage.local.set({ [SUPPORT_POLICY_STORAGE_KEY]: policy })
 }
 
-const SUPPORT_FEE_BASELINES_KEY = 'supportFeeBaselines'
+const SUPPORT_FEE_ORIGINS_KEY = 'supportFeeOrigins'
 
-export async function readSupportBaseline(orderId: string): Promise<number | null> {
-  const stored = await browser.storage.local.get(SUPPORT_FEE_BASELINES_KEY)
-  const baselines = stored[SUPPORT_FEE_BASELINES_KEY]
-  if (!isBaselineRecord(baselines)) return null
-  const fee = baselines[orderId]
+/** Lunchdrop's fee for this order, saved from the place response. */
+export async function readSupportOrigin(orderId: string): Promise<number | null> {
+  const stored = await browser.storage.local.get(SUPPORT_FEE_ORIGINS_KEY)
+  const origins = stored[SUPPORT_FEE_ORIGINS_KEY]
+  if (!isBaselineRecord(origins)) return null
+  const fee = origins[orderId]
   return typeof fee === 'number' && Number.isFinite(fee) ? fee : null
 }
 
-/** Keeps the first fee seen for an order, which is Lunchdrop's own amount. */
-export async function rememberSupportBaseline(orderId: string, fee: number): Promise<number> {
-  const existing = await readSupportBaseline(orderId)
+/** Keeps the first saved fee. Later writes cannot replace Lunchdrop's amount. */
+export async function rememberSupportOrigin(orderId: string, fee: number): Promise<number> {
+  const existing = await readSupportOrigin(orderId)
   if (existing !== null) return existing
-  const stored = await browser.storage.local.get(SUPPORT_FEE_BASELINES_KEY)
-  const baselines = stored[SUPPORT_FEE_BASELINES_KEY]
-  const next: Record<string, number> = isBaselineRecord(baselines) ? { ...baselines } : {}
+  const stored = await browser.storage.local.get(SUPPORT_FEE_ORIGINS_KEY)
+  const origins = stored[SUPPORT_FEE_ORIGINS_KEY]
+  const next: Record<string, number> = isBaselineRecord(origins) ? { ...origins } : {}
   next[orderId] = fee
-  await browser.storage.local.set({ [SUPPORT_FEE_BASELINES_KEY]: next })
+  await browser.storage.local.set({ [SUPPORT_FEE_ORIGINS_KEY]: next })
   return fee
 }
 
