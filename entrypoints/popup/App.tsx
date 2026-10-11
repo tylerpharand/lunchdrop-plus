@@ -7,7 +7,6 @@ import { useSupportPolicy } from '../../components/use-support-policy'
 const TABS = [
   { id: 'support', label: 'Support' },
   { id: 'ui', label: 'UI' },
-  { id: 'misc', label: 'Misc' },
 ] as const
 
 type PopupTab = (typeof TABS)[number]['id']
@@ -58,7 +57,7 @@ export default function App(): ReactElement {
         role="tablist"
         aria-label="Settings"
         aria-orientation="horizontal"
-        className="mt-4 grid grid-cols-3 border-b border-zinc-200"
+        className="mt-4 grid grid-cols-2 border-b border-zinc-200"
       >
         {TABS.map(item => {
           const selected = item.id === tab
@@ -108,9 +107,6 @@ export default function App(): ReactElement {
         ) : null}
         {tab === 'ui' ? (
           <HidePromptsSetting preference={preference} onChange={setPreference} />
-        ) : null}
-        {tab === 'misc' ? (
-          <p className="text-sm leading-5 text-zinc-600">Nothing else to set.</p>
         ) : null}
       </div>
     </main>
