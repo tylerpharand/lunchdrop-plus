@@ -1,4 +1,4 @@
-import { isMiscPrompt } from '../../lib/page-prompts'
+import { hiddenPromptIds, pagePromptIdFromText, type HidePagePrompts } from '../../lib/page-prompts'
 
 const STYLE_ID = 'lunchbot-page-prompts'
 const HIDDEN_ATTR = 'data-lunchbot-hidden-prompt'
@@ -20,12 +20,13 @@ export function removePromptStyles(): void {
   }
 }
 
-export function syncMiscPrompts(hide: boolean): void {
+export function syncMiscPrompts(preference: HidePagePrompts): void {
+  const hidden = hiddenPromptIds(preference)
   for (const banner of document.querySelectorAll('[class*="banner-component"]')) {
     if (!(banner instanceof HTMLElement)) continue
     const host = promptHost(banner)
-    const matches = isMiscPrompt(banner.textContent)
-    if (hide && matches) {
+    const promptId = pagePromptIdFromText(banner.textContent)
+    if (promptId !== null && hidden.has(promptId)) {
       host.setAttribute(HIDDEN_ATTR, 'true')
       continue
     }

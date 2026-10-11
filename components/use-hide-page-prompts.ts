@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { browser } from 'wxt/browser'
-import { parseHidePagePrompts } from '../lib/page-prompts'
+import {
+  defaultHidePagePrompts,
+  parseHidePagePrompts,
+  type HidePagePrompts,
+} from '../lib/page-prompts'
 import {
   HIDE_PAGE_PROMPTS_STORAGE_KEY,
   readHidePagePrompts,
@@ -8,18 +12,18 @@ import {
 } from '../lib/page-prompts-storage'
 
 export function useHidePagePrompts(): {
-  hide: boolean
-  setHide: (hide: boolean) => void
+  preference: HidePagePrompts
+  setPreference: (preference: HidePagePrompts) => void
 } {
-  const [hide, setHideState] = useState(false)
+  const [preference, setPreferenceState] = useState<HidePagePrompts>(defaultHidePagePrompts)
 
   useEffect(() => {
-    void readHidePagePrompts().then(setHideState)
+    void readHidePagePrompts().then(setPreferenceState)
 
     const onStorageChanged = (changes: Record<string, { newValue?: unknown }>): void => {
       const change = changes[HIDE_PAGE_PROMPTS_STORAGE_KEY]
       if (change === undefined) return
-      setHideState(parseHidePagePrompts(change.newValue))
+      setPreferenceState(parseHidePagePrompts(change.newValue))
     }
     browser.storage.onChanged.addListener(onStorageChanged)
     return () => {
@@ -27,10 +31,10 @@ export function useHidePagePrompts(): {
     }
   }, [])
 
-  const setHide = (next: boolean): void => {
-    setHideState(next)
+  const setPreference = (next: HidePagePrompts): void => {
+    setPreferenceState(next)
     void writeHidePagePrompts(next)
   }
 
-  return { hide, setHide }
+  return { preference, setPreference }
 }

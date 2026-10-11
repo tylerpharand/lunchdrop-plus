@@ -10,7 +10,11 @@ import {
   readSupportPolicy,
   SUPPORT_POLICY_STORAGE_KEY,
 } from '../../lib/support-policy-storage'
-import { parseHidePagePrompts } from '../../lib/page-prompts'
+import {
+  defaultHidePagePrompts,
+  parseHidePagePrompts,
+  type HidePagePrompts,
+} from '../../lib/page-prompts'
 import { HIDE_PAGE_PROMPTS_STORAGE_KEY, readHidePagePrompts } from '../../lib/page-prompts-storage'
 import { browser } from 'wxt/browser'
 import PageApp from './App'
@@ -24,7 +28,7 @@ export default defineContentScript({
   runAt: 'document_start',
   async main(ctx) {
     let policy: SupportPolicy = { mode: 'default', percent: 10 }
-    let hidePrompts = false
+    let hidePrompts: HidePagePrompts = defaultHidePagePrompts()
     let observer: MutationObserver | null = null
 
     window.addEventListener('message', event => {

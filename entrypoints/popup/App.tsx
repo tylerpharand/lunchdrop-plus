@@ -14,7 +14,7 @@ type PopupTab = (typeof TABS)[number]['id']
 
 export default function App(): ReactElement {
   const { policy, setPolicy } = useSupportPolicy()
-  const { hide, setHide } = useHidePagePrompts()
+  const { preference, setPreference } = useHidePagePrompts()
   const [tab, setTab] = useState<PopupTab>('support')
   const tabRefs = useRef(new Map<PopupTab, HTMLButtonElement>())
 
@@ -106,7 +106,9 @@ export default function App(): ReactElement {
             <SupportPreference policy={policy} quote={null} onChange={setPolicy} />
           </>
         ) : null}
-        {tab === 'ui' ? <HidePromptsSetting hide={hide} onChange={setHide} /> : null}
+        {tab === 'ui' ? (
+          <HidePromptsSetting preference={preference} onChange={setPreference} />
+        ) : null}
         {tab === 'misc' ? (
           <p className="text-sm leading-5 text-zinc-600">Nothing else to set.</p>
         ) : null}
