@@ -136,9 +136,11 @@ export function orderSupportFromMessage(value: unknown): OrderSupportContext | u
 export interface SupportOrigin {
   orderId: string
   supportFee: number
+  /** True when a meal change should overwrite the fee saved for this order. */
+  replace: boolean
 }
 
-/** Lunchdrop's fee from the place-order response, before we replace it. */
+/** Lunchdrop's fee from a place, update, or remove response, before we replace it. */
 export function supportOriginFromMessage(value: unknown): SupportOrigin | null {
   if (!isRecord(value)) return null
   if (field(value, 'source') !== LUNCHBOT_SOURCE || field(value, 'type') !== 'support-origin') {
@@ -147,12 +149,18 @@ export function supportOriginFromMessage(value: unknown): SupportOrigin | null {
   const orderId = field(value, 'orderId')
   const supportFee = readMoney(field(value, 'supportFee'))
   if (typeof orderId !== 'string' || supportFee === null) return null
-  return { orderId, supportFee }
+  return { orderId, supportFee, replace: field(value, 'replace') === true }
 }
 
-export function publishSupportOrigin(orderId: string, supportFee: number): void {
+export function publishSupportOrigin(orderId: string, supportFee: number, replace = false): void {
   window.postMessage(
-    { source: LUNCHBOT_SOURCE, type: 'support-origin', orderId, supportFee },
+    {
+      source: LUNCHBOT_SOURCE,
+      type: 'support-origin',
+      orderId,
+      supportFee,
+      replace,
+    },
     window.location.origin
   )
 }
@@ -308,7 +316,14 @@ export function subsidyRemainingForOrder(
   return { cap: parsedCap, remaining: roundMoney(Math.max(0, parsedCap - used)) }
 }
 
-export function placeOrderDeliveryId(url: string, method: string): string | null {
+export interface OrderMutation {
+  deliveryId: string
+  /** An item update or removal recalculates Lunchdrop's fee for the new meal. */
+  replacesOrigin: boolean
+}
+
+/** Place, item update, and item removal. Other order posts, such as support-fee, are ignored. */
+export function orderMutation(url: string, method: string): OrderMutation | null {
   if (method.toUpperCase() !== 'POST') return null
   let pathname = ''
   try {
@@ -316,8 +331,13 @@ export function placeOrderDeliveryId(url: string, method: string): string | null
   } catch {
     return null
   }
-  const match = /^\/api\/deliveries\/([^/]+)\/order\/?$/.exec(pathname)
-  return match?.[1] ?? null
+  const match =
+    /^\/api\/(?:guest-lunches\/[^/]+\/)?deliveries\/([^/]+)\/order(?:\/(update|remove))?\/?$/.exec(
+      pathname
+    )
+  const deliveryId = match?.[1]
+  if (deliveryId === undefined) return null
+  return { deliveryId, replacesOrigin: match?.[2] !== undefined }
 }
 
 export function parsePlacedOrder(value: unknown): PlacedOrder | null {

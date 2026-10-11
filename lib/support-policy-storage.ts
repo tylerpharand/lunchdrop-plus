@@ -14,7 +14,7 @@ export async function writeSupportPolicy(policy: SupportPolicy): Promise<void> {
 
 const SUPPORT_FEE_ORIGINS_KEY = 'supportFeeOrigins'
 
-/** Lunchdrop's fee for this order, saved from the place response. */
+/** Lunchdrop's fee for this order, saved from the latest place or meal-change response. */
 export async function readSupportOrigin(orderId: string): Promise<number | null> {
   const stored = await browser.storage.local.get(SUPPORT_FEE_ORIGINS_KEY)
   const origins = stored[SUPPORT_FEE_ORIGINS_KEY]
@@ -23,10 +23,18 @@ export async function readSupportOrigin(orderId: string): Promise<number | null>
   return typeof fee === 'number' && Number.isFinite(fee) ? fee : null
 }
 
-/** Keeps the first saved fee. Later writes cannot replace Lunchdrop's amount. */
-export async function rememberSupportOrigin(orderId: string, fee: number): Promise<number> {
-  const existing = await readSupportOrigin(orderId)
-  if (existing !== null) return existing
+/**
+ * The first place response sticks. A meal change replaces it with Lunchdrop's new fee.
+ */
+export async function rememberSupportOrigin(
+  orderId: string,
+  fee: number,
+  replace = false
+): Promise<number> {
+  if (!replace) {
+    const existing = await readSupportOrigin(orderId)
+    if (existing !== null) return existing
+  }
   const stored = await browser.storage.local.get(SUPPORT_FEE_ORIGINS_KEY)
   const origins = stored[SUPPORT_FEE_ORIGINS_KEY]
   const next: Record<string, number> = isBaselineRecord(origins) ? { ...origins } : {}

@@ -38,7 +38,7 @@ export default defineContentScript({
       if (isPolicyRequestMessage(event.data)) publishSupportPolicy(policy)
       const origin = supportOriginFromMessage(event.data)
       if (origin === null) return
-      void rememberSupportOrigin(origin.orderId, origin.supportFee)
+      void rememberSupportOrigin(origin.orderId, origin.supportFee, origin.replace)
     })
 
     const publishStored = (next: SupportPolicy): void => {

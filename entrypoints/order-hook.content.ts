@@ -9,8 +9,9 @@ import {
   orderWithSupportFee,
   parseJson,
   parsePlacedOrder,
-  placeOrderDeliveryId,
+  orderMutation,
   publishSupportOrigin,
+  type OrderMutation,
   subsidyRemainingForOrder,
   subsidySnapshotFromDay,
   type OrderSupportContext,
@@ -80,13 +81,13 @@ function installOrderHook(): void {
 
   window.fetch = async (input, init) => {
     const response = await originalFetch(input, init)
-    const deliveryId = placeOrderDeliveryId(requestUrl(input), requestMethod(input, init))
-    if (deliveryId === null || !response.ok) return response
+    const mutation = orderMutation(requestUrl(input), requestMethod(input, init))
+    if (mutation === null || !response.ok) return response
     try {
       const patched = await settlePlacedOrder(
         originalFetch,
         await response.clone().text(),
-        deliveryId,
+        mutation,
         await readPolicy()
       )
       return patched === null ? response : jsonResponse(response, patched)
@@ -131,22 +132,22 @@ function installPlaceOrderXhr(
 
   XMLHttpRequest.prototype.send = function (body?: Document | XMLHttpRequestBodyInit | null): void {
     const meta = requests.get(this)
-    const deliveryId = meta === undefined ? null : placeOrderDeliveryId(meta.url, meta.method)
-    if (deliveryId !== null) holdPlacedOrder(this, deliveryId, originalFetch, readPolicy)
+    const mutation = meta === undefined ? null : orderMutation(meta.url, meta.method)
+    if (mutation !== null) holdPlacedOrder(this, mutation, originalFetch, readPolicy)
     callSend(this, body)
   }
 }
 
 function holdPlacedOrder(
   xhr: XMLHttpRequest,
-  deliveryId: string,
+  mutation: OrderMutation,
   originalFetch: typeof fetch,
   readPolicy: () => Promise<SupportPolicy>
 ): void {
   const finish = xhr.onloadend
   if (typeof finish !== 'function') return
   xhr.onloadend = event => {
-    void applyPlacedOrder(xhr, deliveryId, originalFetch, readPolicy).finally(() => {
+    void applyPlacedOrder(xhr, mutation, originalFetch, readPolicy).finally(() => {
       finish.call(xhr, event)
     })
   }
@@ -154,7 +155,7 @@ function holdPlacedOrder(
 
 async function applyPlacedOrder(
   xhr: XMLHttpRequest,
-  deliveryId: string,
+  mutation: OrderMutation,
   originalFetch: typeof fetch,
   readPolicy: () => Promise<SupportPolicy>
 ): Promise<void> {
@@ -163,7 +164,7 @@ async function applyPlacedOrder(
     const patched = await settlePlacedOrder(
       originalFetch,
       xhr.responseText,
-      deliveryId,
+      mutation,
       await readPolicy()
     )
     if (patched === null) return
@@ -178,13 +179,15 @@ async function applyPlacedOrder(
 async function settlePlacedOrder(
   originalFetch: typeof fetch,
   rawText: string,
-  deliveryId: string,
+  mutation: OrderMutation,
   policy: SupportPolicy
 ): Promise<Record<string, unknown> | null> {
   const raw = parseJson(rawText)
-  const order = parsePlacedOrder(raw)
-  if (order === null) return null
-  publishSupportOrigin(order.id, order.supportFee)
+  if (!isRecord(raw)) return null
+  const carrier = orderCarrier(raw)
+  if (carrier === null) return null
+  const { order } = carrier
+  publishSupportOrigin(order.id, order.supportFee, mutation.replacesOrigin)
 
   const subsidy = policy.mode === 'remaining' ? readSubsidySnapshot(order) : null
   if (policy.mode === 'remaining' && subsidy === null) {
@@ -194,11 +197,13 @@ async function settlePlacedOrder(
   const desired = desiredSupportFee(order, policy, subsidy)
   if (desired === null) return null
 
-  const targetDeliveryId = order.deliveryId ?? deliveryId
+  const targetDeliveryId = order.deliveryId ?? mutation.deliveryId
   let next = orderWithSupportFee(order, desired)
   try {
     const update = await postSupportFee(originalFetch, targetDeliveryId, order.id, desired)
-    if (isRecord(update) && parsePlacedOrder(update) !== null) return update
+    if (isRecord(update) && parsePlacedOrder(update) !== null && carrier.record === raw) {
+      return update
+    }
     const money = moneyFromSupportUpdate(update)
     if (money !== null) {
       next = {
@@ -213,8 +218,22 @@ async function settlePlacedOrder(
     return null
   }
 
-  const patched = patchOrderRecord(raw, next)
-  return isRecord(patched) ? patched : null
+  const patched = patchOrderRecord(carrier.record, next)
+  if (!isRecord(patched)) return null
+  if (carrier.record === raw) return patched
+  return { ...raw, order: patched }
+}
+
+function orderCarrier(
+  raw: Record<string, unknown>
+): { record: Record<string, unknown>; order: PlacedOrder } | null {
+  const direct = parsePlacedOrder(raw)
+  if (direct !== null) return { record: raw, order: direct }
+  const nested = raw['order']
+  if (!isRecord(nested)) return null
+  const order = parsePlacedOrder(nested)
+  if (order === null) return null
+  return { record: nested, order }
 }
 
 async function postSupportFee(
