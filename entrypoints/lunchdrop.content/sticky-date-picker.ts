@@ -13,6 +13,13 @@ const ICON_SIZE = '2rem'
 const ICON_COVER = '2rem'
 const FADE_END = '3rem'
 const EDGE_FADE = '1.5rem'
+// Lunchdrop's smaller layout runs through 767px. Scale the bar there so the
+// type, padding, and height come down together. A stretched block stays full
+// width under zoom, so the width is left alone.
+const NARROW_MAX = '767px'
+const NARROW_SCALE = '0.9'
+// A step darker than the accent green (#009900).
+const BAR_EDGE = '#007a00'
 
 const DAY_MASK = `linear-gradient(to right, transparent 0, transparent ${ICON_COVER}, #000 ${FADE_END}, #000 calc(100% - ${EDGE_FADE}), transparent 100%)`
 
@@ -24,6 +31,8 @@ ${HEADER}[${HEADER_HIDDEN}="true"] {
   position: sticky !important;
   top: 0 !important;
   z-index: 30 !important;
+  box-sizing: border-box !important;
+  border-bottom: 2px solid ${BAR_EDGE} !important;
 }
 [${ROOT_ATTR}="true"] ${DATE_BAR} > div {
   position: relative !important;
@@ -72,6 +81,11 @@ svg[${TRIGGER_ATTR}="true"] {
 }
 [${ROOT_ATTR}="true"] ${DATE_BAR} > div > div:has(svg[data-icon="calendar"]) {
   display: none !important;
+}
+@media (max-width: ${NARROW_MAX}) {
+  [${ROOT_ATTR}="true"] ${DATE_BAR} {
+    zoom: ${NARROW_SCALE};
+  }
 }
 `
 
