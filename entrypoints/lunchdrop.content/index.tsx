@@ -57,11 +57,17 @@ import {
   readStickyDatePicker,
   STICKY_DATE_PICKER_STORAGE_KEY,
 } from '../../lib/sticky-date-picker-storage'
+import { defaultCombinedSignIn, parseCombinedSignIn } from '../../lib/combined-sign-in'
+import {
+  COMBINED_SIGN_IN_STORAGE_KEY,
+  readCombinedSignIn,
+} from '../../lib/combined-sign-in-storage'
 import { browser } from 'wxt/browser'
 import PageApp from './App'
 import { removeEvenRestaurantCards, syncEvenRestaurantCards } from './even-restaurant-cards'
 import { removeHideNewBadges, syncHideNewBadges } from './new-badges'
 import { removeStickyDatePicker, syncStickyDatePicker } from './sticky-date-picker'
+import { removeCombinedSignIn, syncCombinedSignIn } from './combined-sign-in'
 import { removeRestaurantTileDetails, syncRestaurantTileDetails } from './restaurant-tile-details'
 import {
   ensureOrderSummaryStyles,
@@ -105,6 +111,7 @@ export default defineContentScript({
     let restaurantTileDetails: RestaurantTileDetails = defaultRestaurantTileDetails()
     let hideNewBadges = defaultHideNewBadges()
     let stickyDatePicker = defaultStickyDatePicker()
+    let combinedSignIn = defaultCombinedSignIn()
     let observer: MutationObserver | null = null
     const stopOverrideMarks = startSupportOverrideMarks()
 
@@ -123,6 +130,10 @@ export default defineContentScript({
       publishSupportPolicy(next)
     }
     watchStored(SUPPORT_POLICY_STORAGE_KEY, parseSupportPolicy, readSupportPolicy, publishStored)
+    watchStored(COMBINED_SIGN_IN_STORAGE_KEY, parseCombinedSignIn, readCombinedSignIn, value => {
+      combinedSignIn = value
+      syncCombinedSignIn(combinedSignIn)
+    })
 
     const ui = await createShadowRootUi(ctx, {
       name: 'lunchdrop-plus-support',
@@ -220,6 +231,7 @@ export default defineContentScript({
       syncRestaurantTileDetails(restaurantTileDetails)
       syncHideNewBadges(hideNewBadges)
       syncStickyDatePicker(stickyDatePicker)
+      syncCombinedSignIn(combinedSignIn)
       injectSupportRow()
       syncMiscPrompts(hidePrompts)
       syncOrderSummary(hideOrderSummary)
@@ -232,6 +244,7 @@ export default defineContentScript({
         syncRestaurantTileDetails(restaurantTileDetails)
         syncHideNewBadges(hideNewBadges)
         syncStickyDatePicker(stickyDatePicker)
+        syncCombinedSignIn(combinedSignIn)
         refreshSupportOverrideMarks()
         observer?.observe(document.body, { childList: true, subtree: true })
       }
@@ -256,6 +269,7 @@ export default defineContentScript({
       removeRestaurantTileDetails()
       removeHideNewBadges()
       removeStickyDatePicker()
+      removeCombinedSignIn()
     })
   },
 })

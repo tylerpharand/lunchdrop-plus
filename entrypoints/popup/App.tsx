@@ -1,5 +1,6 @@
 import { useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { browser } from 'wxt/browser'
+import { CombinedSignInSetting } from '../../components/CombinedSignInSetting'
 import { EvenRestaurantCardsSetting } from '../../components/EvenRestaurantCardsSetting'
 import { HideNewBadgesSetting } from '../../components/HideNewBadgesSetting'
 import { StickyDatePickerSetting } from '../../components/StickyDatePickerSetting'
@@ -8,6 +9,7 @@ import { HidePromptsSetting } from '../../components/HidePromptsSetting'
 import { RestaurantTileDetailsSetting } from '../../components/RestaurantTileDetailsSetting'
 import { SupportPreference } from '../../components/SupportPreference'
 import { WrapDescriptionsSetting } from '../../components/WrapDescriptionsSetting'
+import { useCombinedSignIn } from '../../components/use-combined-sign-in'
 import { useEvenRestaurantCards } from '../../components/use-even-restaurant-cards'
 import { useHideNewBadges } from '../../components/use-hide-new-badges'
 import { useStickyDatePicker } from '../../components/use-sticky-date-picker'
@@ -34,6 +36,7 @@ export default function App(): ReactElement {
   const { evenRestaurantCards, setEvenRestaurantCards } = useEvenRestaurantCards()
   const { hideNewBadges, setHideNewBadges } = useHideNewBadges()
   const { stickyDatePicker, setStickyDatePicker } = useStickyDatePicker()
+  const { combinedSignIn, setCombinedSignIn } = useCombinedSignIn()
   const { details: restaurantTileDetails, setDetails: setRestaurantTileDetails } =
     useRestaurantTileDetails()
   const [tab, setTab] = useState<PopupTab>('support')
@@ -149,6 +152,7 @@ export default function App(): ReactElement {
             />
             <HideNewBadgesSetting enabled={hideNewBadges} onChange={setHideNewBadges} />
             <StickyDatePickerSetting enabled={stickyDatePicker} onChange={setStickyDatePicker} />
+            <CombinedSignInSetting enabled={combinedSignIn} onChange={setCombinedSignIn} />
           </>
         ) : null}
       </div>
