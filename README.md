@@ -6,7 +6,18 @@
 
 Quality of life improvements for [Lunchdrop](https://lunchdrop.com/).
 
-Install on [Firefox](https://addons.mozilla.org/en-US/firefox/addon/lunchdropplus/).
-
 - 💵 Default support amounts
 - 🎨 UI Tweaks
+
+## Installation
+
+Download a build from the [latest release](https://github.com/tylerpharand/lunchdrop-plus/releases/latest).
+
+| Browser        | Status           |
+| -------------- | ---------------- |
+| Chrome         | ✅ Supported     |
+| Firefox        | ✅ Supported     |
+| Firefox Mobile | ✅ Supported     |
+| Chrome Mobile  | ❌ Not supported |
+| Safari         | 🔜 Coming soon   |
+| Safari Mobile  | 🔜 Coming soon   |
