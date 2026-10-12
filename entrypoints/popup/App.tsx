@@ -1,8 +1,12 @@
 import { useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { browser } from 'wxt/browser'
+import { EvenRestaurantCardsSetting } from '../../components/EvenRestaurantCardsSetting'
+import { HideOrderSummarySetting } from '../../components/HideOrderSummarySetting'
 import { HidePromptsSetting } from '../../components/HidePromptsSetting'
 import { SupportPreference } from '../../components/SupportPreference'
 import { WrapDescriptionsSetting } from '../../components/WrapDescriptionsSetting'
+import { useEvenRestaurantCards } from '../../components/use-even-restaurant-cards'
+import { useHideOrderSummary } from '../../components/use-hide-order-summary'
 import { useHidePagePrompts } from '../../components/use-hide-page-prompts'
 import { useSupportPolicy } from '../../components/use-support-policy'
 import { useWrapLongDescriptions } from '../../components/use-wrap-long-descriptions'
@@ -19,7 +23,9 @@ type PopupTab = (typeof TABS)[number]['id']
 export default function App(): ReactElement {
   const { policy, setPolicy } = useSupportPolicy()
   const { preference, setPreference } = useHidePagePrompts()
+  const { preference: orderSummary, setPreference: setOrderSummary } = useHideOrderSummary()
   const { wrapLongDescriptions, setWrapLongDescriptions } = useWrapLongDescriptions()
+  const { evenRestaurantCards, setEvenRestaurantCards } = useEvenRestaurantCards()
   const [tab, setTab] = useState<PopupTab>('support')
   const tabRefs = useRef(new Map<PopupTab, HTMLButtonElement>())
 
@@ -46,7 +52,7 @@ export default function App(): ReactElement {
   return (
     <main className="bg-white p-4 font-sans text-zinc-900 antialiased">
       <header className="flex items-center justify-between">
-        <h1 className="text-base font-semibold tracking-tight">
+        <h1 className="text-base font-bold tracking-tight text-[#009900]">
           Lunchdrop+ <span className="font-normal text-zinc-400">({extensionVersion})</span>
         </h1>
         <a
@@ -116,9 +122,14 @@ export default function App(): ReactElement {
         {tab === 'ui' ? (
           <>
             <HidePromptsSetting preference={preference} onChange={setPreference} />
+            <HideOrderSummarySetting preference={orderSummary} onChange={setOrderSummary} />
             <WrapDescriptionsSetting
               enabled={wrapLongDescriptions}
               onChange={setWrapLongDescriptions}
+            />
+            <EvenRestaurantCardsSetting
+              enabled={evenRestaurantCards}
+              onChange={setEvenRestaurantCards}
             />
           </>
         ) : null}

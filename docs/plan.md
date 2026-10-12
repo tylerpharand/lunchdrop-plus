@@ -26,9 +26,9 @@ Availability alerts are a separate project. Nothing in this repo signs in on the
 
 ## Extension
 
-**Support fee.** The order row is labeled "Support:". Clicking the price opens a modal titled "Support" instead of Lunchdrop's editor. The same preference is in the toolbar popup. That sheet stays on the visible viewport. Its width and height follow the visual viewport while the page scrolls and while the browser chrome collapses. A narrow viewport keeps it on the bottom edge. A wider viewport centers it.
+**Support fee.** The order row is labeled "Support:". When the amount is not Lunchdrop's own fee, that price is bold and italic. Clicking the price opens a modal titled "Support" instead of Lunchdrop's editor. The same preference is in the toolbar popup. That sheet stays on the visible viewport. Its width and height follow the visual viewport while the page scrolls and while the browser chrome collapses. A narrow viewport keeps it on the bottom edge. A wider viewport centers it.
 
-**Settings.** The toolbar popup is headed "Lunchdrop+" with the extension version in grey parentheses beside it, and groups settings into Support and UI tabs. A subdued GitHub mark at the right of that heading opens the public repository. Support is the fee preference. UI is a combobox to hide all, show all, or customize which of the reminder, rating, referral, and invite banners are hidden. Order updates stay visible. Nothing is hidden unless the user says so. Long words in item descriptions wrap onto the next line. That wrap is on by default and can be turned off in the UI tab.
+**Settings.** The toolbar popup is headed "Lunchdrop+" in bold accent green, with the extension version in grey parentheses beside it, and groups settings into Support and UI tabs. A subdued GitHub mark at the right of that heading opens the public repository. Support is the fee preference. UI has a combobox to hide all, show all, or customize which of the reminder, rating, referral, and invite banners are hidden. Order updates stay visible. Those banners stay visible unless the user hides them. A second combobox, Order summary, hides the links to add more items, enter a promo code or gift card, and remove the subsidy, plus the info icons beside each breakdown row. Those start hidden. The same hide-all, show-all, or custom choice can show any of them. Cancel stays visible. Long words in item descriptions wrap onto the next line. That wrap is on by default and can be turned off in the UI tab. Restaurant cards grow so a full row lines up with the page. A short last row stays the same card size and stays on the left. That layout is on by default and can be turned off in the UI tab.
 
 **Browsers.** Chrome and Firefox on desktop. Firefox for Android can run extensions; Chrome on Android generally cannot.
 
@@ -43,4 +43,6 @@ Placing an order stays `POST /api/deliveries/{deliveryId}/order`. Editing an ite
 1. Support-fee preference in the popup and on the order page. Shipped.
 2. Hide reminder, rating, referral, and invite banners. Shipped.
 3. Wrap long words in item descriptions. Shipped.
-4. Leave availability alerts out of this repository.
+4. Hide the order summary links to add more items, enter a promo code or gift card, and remove the subsidy, plus the info icons beside each breakdown row. Default is hide all. Cancel stays visible.
+5. Even out restaurant cards so a full row lines up with the page. On by default. A short last row keeps that card size and stays on the left.
+6. Leave availability alerts out of this repository.

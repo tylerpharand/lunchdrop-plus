@@ -208,6 +208,67 @@ export function feesMatch(left: number, right: number): boolean {
   return Math.abs(left - right) < 0.001
 }
 
+export interface SupportOverrideMarks {
+  /** Support amounts where every order showing that fee was replaced. */
+  amounts: ReadonlySet<string>
+  /** `support|amountDue` for an order whose fee was replaced. */
+  precise: ReadonlySet<string>
+  /** `support|amountDue` shared with an order Lunchdrop still owns. */
+  blocked: ReadonlySet<string>
+}
+
+/**
+ * Which on-screen support amounts were replaced.
+ * Amount due separates two orders that show the same support fee.
+ */
+export function supportOverrideMarks(
+  orders: readonly Pick<PlacedOrder, 'id' | 'supportFee' | 'amountDue'>[],
+  origins: Readonly<Record<string, number>>
+): SupportOverrideMarks {
+  const seen = new Set<string>()
+  const byAmount = new Map<string, { shown: number; overridden: number }>()
+  const precise = new Set<string>()
+  const blocked = new Set<string>()
+
+  for (const order of orders) {
+    if (seen.has(order.id)) continue
+    seen.add(order.id)
+    const amount = formatDollars(order.supportFee)
+    const key = `${amount}|${formatDollars(order.amountDue)}`
+    const origin = origins[order.id]
+    const overridden = typeof origin === 'number' && !feesMatch(origin, order.supportFee)
+    const bucket = byAmount.get(amount) ?? { shown: 0, overridden: 0 }
+    bucket.shown += 1
+    if (overridden) bucket.overridden += 1
+    byAmount.set(amount, bucket)
+    if (!overridden || blocked.has(key)) {
+      precise.delete(key)
+      blocked.add(key)
+      continue
+    }
+    precise.add(key)
+  }
+
+  const amounts = new Set<string>()
+  for (const [amount, bucket] of byAmount) {
+    if (bucket.overridden > 0 && bucket.overridden === bucket.shown) amounts.add(amount)
+  }
+  return { amounts, precise, blocked }
+}
+
+export function supportAmountOverridden(
+  marks: SupportOverrideMarks,
+  supportAmount: string,
+  amountDue: string | null
+): boolean {
+  if (amountDue !== null) {
+    const key = `${supportAmount}|${amountDue}`
+    if (marks.blocked.has(key)) return false
+    if (marks.precise.has(key)) return true
+  }
+  return marks.amounts.has(supportAmount)
+}
+
 /** Dollar to show when Custom is opened from another choice. */
 export function customSupportSeed(currentFee: number, quote: SupportQuote): number {
   if (quote.baselineKnown && quote.baselineFee !== null) return quote.baselineFee

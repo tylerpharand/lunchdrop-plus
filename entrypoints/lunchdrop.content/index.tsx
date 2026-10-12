@@ -18,16 +18,44 @@ import {
   type HidePagePrompts,
 } from '../../lib/page-prompts'
 import { HIDE_PAGE_PROMPTS_STORAGE_KEY, readHidePagePrompts } from '../../lib/page-prompts-storage'
+import {
+  defaultHideOrderSummary,
+  parseHideOrderSummary,
+  type HideOrderSummary,
+} from '../../lib/order-summary'
+import {
+  HIDE_ORDER_SUMMARY_STORAGE_KEY,
+  readHideOrderSummary,
+} from '../../lib/order-summary-storage'
 import { bindVisualFrame } from '../../lib/visual-viewport'
 import { defaultWrapLongDescriptions, parseWrapLongDescriptions } from '../../lib/wrap-descriptions'
 import {
   readWrapLongDescriptions,
   WRAP_LONG_DESCRIPTIONS_STORAGE_KEY,
 } from '../../lib/wrap-descriptions-storage'
+import {
+  defaultEvenRestaurantCards,
+  parseEvenRestaurantCards,
+} from '../../lib/even-restaurant-cards'
+import {
+  EVEN_RESTAURANT_CARDS_STORAGE_KEY,
+  readEvenRestaurantCards,
+} from '../../lib/even-restaurant-cards-storage'
 import { browser } from 'wxt/browser'
 import PageApp from './App'
+import { removeEvenRestaurantCards, syncEvenRestaurantCards } from './even-restaurant-cards'
+import {
+  ensureOrderSummaryStyles,
+  removeOrderSummaryStyles,
+  syncOrderSummary,
+} from './order-summary'
 import { ensurePromptStyles, removePromptStyles, syncMiscPrompts } from './page-prompts'
-import { injectSupportRow, removeSupportRow } from './support-row'
+import {
+  injectSupportRow,
+  refreshSupportOverrideMarks,
+  removeSupportRow,
+  startSupportOverrideMarks,
+} from './support-row'
 import { removeWrapLongDescriptions, syncWrapLongDescriptions } from './wrap-descriptions'
 import './style.css'
 
@@ -38,15 +66,20 @@ export default defineContentScript({
   async main(ctx) {
     let policy: SupportPolicy = { mode: 'default', percent: 10 }
     let hidePrompts: HidePagePrompts = defaultHidePagePrompts()
+    let hideOrderSummary: HideOrderSummary = defaultHideOrderSummary()
     let wrapLongDescriptions = defaultWrapLongDescriptions()
+    let evenRestaurantCards = defaultEvenRestaurantCards()
     let observer: MutationObserver | null = null
+    const stopOverrideMarks = startSupportOverrideMarks()
 
     window.addEventListener('message', event => {
       if (event.source !== window) return
       if (isPolicyRequestMessage(event.data)) publishSupportPolicy(policy)
       const origin = supportOriginFromMessage(event.data)
       if (origin === null) return
-      void rememberSupportOrigin(origin.orderId, origin.supportFee, origin.replace)
+      void rememberSupportOrigin(origin.orderId, origin.supportFee, origin.replace).then(() => {
+        refreshSupportOverrideMarks()
+      })
     })
 
     const publishStored = (next: SupportPolicy): void => {
@@ -92,16 +125,31 @@ export default defineContentScript({
         hidePrompts = parseHidePagePrompts(promptChange.newValue)
         syncMiscPrompts(hidePrompts)
       }
+      const orderSummaryChange = changes[HIDE_ORDER_SUMMARY_STORAGE_KEY]
+      if (orderSummaryChange !== undefined) {
+        hideOrderSummary = parseHideOrderSummary(orderSummaryChange.newValue)
+        syncOrderSummary(hideOrderSummary)
+      }
       const wrapChange = changes[WRAP_LONG_DESCRIPTIONS_STORAGE_KEY]
-      if (wrapChange === undefined) return
-      wrapLongDescriptions = parseWrapLongDescriptions(wrapChange.newValue)
-      if (document.readyState === 'loading') return
-      syncWrapLongDescriptions(wrapLongDescriptions)
+      if (wrapChange !== undefined) {
+        wrapLongDescriptions = parseWrapLongDescriptions(wrapChange.newValue)
+        if (document.readyState !== 'loading') syncWrapLongDescriptions(wrapLongDescriptions)
+      }
+      const evenChange = changes[EVEN_RESTAURANT_CARDS_STORAGE_KEY]
+      if (evenChange !== undefined) {
+        evenRestaurantCards = parseEvenRestaurantCards(evenChange.newValue)
+        if (document.readyState !== 'loading') syncEvenRestaurantCards(evenRestaurantCards)
+      }
     })
 
     void readHidePagePrompts().then(value => {
       hidePrompts = value
       syncMiscPrompts(hidePrompts)
+    })
+
+    void readHideOrderSummary().then(value => {
+      hideOrderSummary = value
+      syncOrderSummary(hideOrderSummary)
     })
 
     void readWrapLongDescriptions().then(value => {
@@ -110,16 +158,27 @@ export default defineContentScript({
       syncWrapLongDescriptions(wrapLongDescriptions)
     })
 
+    void readEvenRestaurantCards().then(value => {
+      evenRestaurantCards = value
+      if (document.readyState === 'loading') return
+      syncEvenRestaurantCards(evenRestaurantCards)
+    })
+
     const start = (): void => {
       ensurePromptStyles()
+      ensureOrderSummaryStyles()
       syncWrapLongDescriptions(wrapLongDescriptions)
+      syncEvenRestaurantCards(evenRestaurantCards)
       injectSupportRow()
       syncMiscPrompts(hidePrompts)
+      syncOrderSummary(hideOrderSummary)
       ui.mount()
       const syncPage = (): void => {
         observer?.disconnect()
         injectSupportRow()
         syncMiscPrompts(hidePrompts)
+        syncOrderSummary(hideOrderSummary)
+        refreshSupportOverrideMarks()
         observer?.observe(document.body, { childList: true, subtree: true })
       }
       observer = new MutationObserver(syncPage)
@@ -134,9 +193,12 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       observer?.disconnect()
+      stopOverrideMarks()
       removeSupportRow()
       removePromptStyles()
+      removeOrderSummaryStyles()
       removeWrapLongDescriptions()
+      removeEvenRestaurantCards()
     })
   },
 })

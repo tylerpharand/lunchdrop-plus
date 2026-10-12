@@ -14,11 +14,20 @@ export async function writeSupportPolicy(policy: SupportPolicy): Promise<void> {
 
 const SUPPORT_FEE_ORIGINS_KEY = 'supportFeeOrigins'
 
-/** Lunchdrop's fee for this order, saved from the latest place or meal-change response. */
-export async function readSupportOrigin(orderId: string): Promise<number | null> {
+export async function readSupportOrigins(): Promise<Record<string, number>> {
   const stored = await browser.storage.local.get(SUPPORT_FEE_ORIGINS_KEY)
   const origins = stored[SUPPORT_FEE_ORIGINS_KEY]
-  if (!isBaselineRecord(origins)) return null
+  if (!isBaselineRecord(origins)) return {}
+  const next: Record<string, number> = {}
+  for (const [orderId, fee] of Object.entries(origins)) {
+    if (typeof fee === 'number' && Number.isFinite(fee)) next[orderId] = fee
+  }
+  return next
+}
+
+/** Lunchdrop's fee for this order, saved from the latest place or meal-change response. */
+export async function readSupportOrigin(orderId: string): Promise<number | null> {
+  const origins = await readSupportOrigins()
   const fee = origins[orderId]
   return typeof fee === 'number' && Number.isFinite(fee) ? fee : null
 }
