@@ -18,8 +18,6 @@ const EDGE_FADE = '1.5rem'
 // width under zoom, so the width is left alone.
 const NARROW_MAX = '767px'
 const NARROW_SCALE = '0.9'
-// A step darker than the accent green (#009900).
-const BAR_EDGE = '#007a00'
 
 const DAY_MASK = `linear-gradient(to right, transparent 0, transparent ${ICON_COVER}, #000 ${FADE_END}, #000 calc(100% - ${EDGE_FADE}), transparent 100%)`
 
@@ -32,7 +30,7 @@ ${HEADER}[${HEADER_HIDDEN}="true"] {
   top: 0 !important;
   z-index: 30 !important;
   box-sizing: border-box !important;
-  border-bottom: 2px solid ${BAR_EDGE} !important;
+  border-bottom: 1px solid #00000020 !important;
 }
 [${ROOT_ATTR}="true"] ${DATE_BAR} > div {
   position: relative !important;
