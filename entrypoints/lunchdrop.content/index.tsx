@@ -72,6 +72,20 @@ import {
 import { removeWrapLongDescriptions, syncWrapLongDescriptions } from './wrap-descriptions'
 import './style.css'
 
+function watchStored<T>(
+  storageKey: string,
+  parse: (value: unknown) => T,
+  read: () => Promise<T>,
+  apply: (value: T) => void
+): void {
+  browser.storage.onChanged.addListener(changes => {
+    const change = changes[storageKey]
+    if (change === undefined) return
+    apply(parse(change.newValue))
+  })
+  void read().then(apply)
+}
+
 export default defineContentScript({
   matches: ['*://*.lunchdrop.com/*', '*://lunchdrop.com/*'],
   cssInjectionMode: 'ui',
@@ -101,7 +115,7 @@ export default defineContentScript({
       policy = next
       publishSupportPolicy(next)
     }
-    void readSupportPolicy().then(publishStored)
+    watchStored(SUPPORT_POLICY_STORAGE_KEY, parseSupportPolicy, readSupportPolicy, publishStored)
 
     const ui = await createShadowRootUi(ctx, {
       name: 'lunchdrop-plus-support',
@@ -129,72 +143,54 @@ export default defineContentScript({
       },
     })
 
-    browser.storage.onChanged.addListener(changes => {
-      const policyChange = changes[SUPPORT_POLICY_STORAGE_KEY]
-      if (policyChange !== undefined) {
-        policy = parseSupportPolicy(policyChange.newValue)
-        publishSupportPolicy(policy)
-      }
-      const promptChange = changes[HIDE_PAGE_PROMPTS_STORAGE_KEY]
-      if (promptChange !== undefined) {
-        hidePrompts = parseHidePagePrompts(promptChange.newValue)
-        syncMiscPrompts(hidePrompts)
-      }
-      const orderSummaryChange = changes[HIDE_ORDER_SUMMARY_STORAGE_KEY]
-      if (orderSummaryChange !== undefined) {
-        hideOrderSummary = parseHideOrderSummary(orderSummaryChange.newValue)
-        syncOrderSummary(hideOrderSummary)
-      }
-      const wrapChange = changes[WRAP_LONG_DESCRIPTIONS_STORAGE_KEY]
-      if (wrapChange !== undefined) {
-        wrapLongDescriptions = parseWrapLongDescriptions(wrapChange.newValue)
-        if (document.readyState !== 'loading') syncWrapLongDescriptions(wrapLongDescriptions)
-      }
-      const evenChange = changes[EVEN_RESTAURANT_CARDS_STORAGE_KEY]
-      if (evenChange !== undefined) {
-        evenRestaurantCards = parseEvenRestaurantCards(evenChange.newValue)
-        if (document.readyState !== 'loading') syncEvenRestaurantCards(evenRestaurantCards)
-      }
-      const tileChange = changes[RESTAURANT_TILE_DETAILS_STORAGE_KEY]
-      if (tileChange !== undefined) {
-        restaurantTileDetails = parseRestaurantTileDetails(tileChange.newValue)
-        syncRestaurantTileDetails(restaurantTileDetails)
-      }
-      const newBadgeChange = changes[HIDE_NEW_BADGES_STORAGE_KEY]
-      if (newBadgeChange !== undefined) {
-        hideNewBadges = parseHideNewBadges(newBadgeChange.newValue)
-        syncHideNewBadges(hideNewBadges)
-      }
-    })
-
-    void readHidePagePrompts().then(value => {
+    watchStored(HIDE_PAGE_PROMPTS_STORAGE_KEY, parseHidePagePrompts, readHidePagePrompts, value => {
       hidePrompts = value
       syncMiscPrompts(hidePrompts)
     })
 
-    void readHideOrderSummary().then(value => {
-      hideOrderSummary = value
-      syncOrderSummary(hideOrderSummary)
-    })
+    watchStored(
+      HIDE_ORDER_SUMMARY_STORAGE_KEY,
+      parseHideOrderSummary,
+      readHideOrderSummary,
+      value => {
+        hideOrderSummary = value
+        syncOrderSummary(hideOrderSummary)
+      }
+    )
 
-    void readWrapLongDescriptions().then(value => {
-      wrapLongDescriptions = value
-      if (document.readyState === 'loading') return
-      syncWrapLongDescriptions(wrapLongDescriptions)
-    })
+    watchStored(
+      WRAP_LONG_DESCRIPTIONS_STORAGE_KEY,
+      parseWrapLongDescriptions,
+      readWrapLongDescriptions,
+      value => {
+        wrapLongDescriptions = value
+        if (document.readyState === 'loading') return
+        syncWrapLongDescriptions(wrapLongDescriptions)
+      }
+    )
 
-    void readEvenRestaurantCards().then(value => {
-      evenRestaurantCards = value
-      if (document.readyState === 'loading') return
-      syncEvenRestaurantCards(evenRestaurantCards)
-    })
+    watchStored(
+      EVEN_RESTAURANT_CARDS_STORAGE_KEY,
+      parseEvenRestaurantCards,
+      readEvenRestaurantCards,
+      value => {
+        evenRestaurantCards = value
+        if (document.readyState === 'loading') return
+        syncEvenRestaurantCards(evenRestaurantCards)
+      }
+    )
 
-    void readRestaurantTileDetails().then(value => {
-      restaurantTileDetails = value
-      syncRestaurantTileDetails(restaurantTileDetails)
-    })
+    watchStored(
+      RESTAURANT_TILE_DETAILS_STORAGE_KEY,
+      parseRestaurantTileDetails,
+      readRestaurantTileDetails,
+      value => {
+        restaurantTileDetails = value
+        syncRestaurantTileDetails(restaurantTileDetails)
+      }
+    )
 
-    void readHideNewBadges().then(value => {
+    watchStored(HIDE_NEW_BADGES_STORAGE_KEY, parseHideNewBadges, readHideNewBadges, value => {
       hideNewBadges = value
       syncHideNewBadges(hideNewBadges)
     })

@@ -17,7 +17,7 @@ export interface HidePagePrompts {
 const PAGE_PROMPT_IDS: readonly PagePromptId[] = PAGE_PROMPTS.map(prompt => prompt.id)
 
 export function defaultHidePagePrompts(): HidePagePrompts {
-  return { mode: 'show-all', hidden: [] }
+  return { mode: 'hide-all', hidden: [] }
 }
 
 export function parseHidePagePrompts(value: unknown): HidePagePrompts {

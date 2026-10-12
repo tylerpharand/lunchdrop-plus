@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react'
-import { browser } from 'wxt/browser'
 import {
   defaultRestaurantTileDetails,
   parseRestaurantTileDetails,
@@ -10,31 +8,19 @@ import {
   RESTAURANT_TILE_DETAILS_STORAGE_KEY,
   writeRestaurantTileDetails,
 } from '../lib/restaurant-tile-details-storage'
+import { useStoredValue } from './use-stored-value'
 
 export function useRestaurantTileDetails(): {
   details: RestaurantTileDetails
   setDetails: (details: RestaurantTileDetails) => void
 } {
-  const [details, setDetailsState] = useState(defaultRestaurantTileDetails)
-
-  useEffect(() => {
-    void readRestaurantTileDetails().then(setDetailsState)
-
-    const onStorageChanged = (changes: Record<string, { newValue?: unknown }>): void => {
-      const change = changes[RESTAURANT_TILE_DETAILS_STORAGE_KEY]
-      if (change === undefined) return
-      setDetailsState(parseRestaurantTileDetails(change.newValue))
-    }
-    browser.storage.onChanged.addListener(onStorageChanged)
-    return () => {
-      browser.storage.onChanged.removeListener(onStorageChanged)
-    }
-  }, [])
-
-  const setDetails = (next: RestaurantTileDetails): void => {
-    setDetailsState(next)
-    void writeRestaurantTileDetails(next)
-  }
+  const { value: details, setValue: setDetails } = useStoredValue({
+    initial: defaultRestaurantTileDetails(),
+    storageKey: RESTAURANT_TILE_DETAILS_STORAGE_KEY,
+    read: readRestaurantTileDetails,
+    write: writeRestaurantTileDetails,
+    parse: parseRestaurantTileDetails,
+  })
 
   return { details, setDetails }
 }

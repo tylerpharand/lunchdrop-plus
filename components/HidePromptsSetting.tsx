@@ -1,5 +1,4 @@
 import type { ReactElement } from 'react'
-import { ToggleSwitch } from './ToggleSwitch'
 import {
   hiddenPromptIds,
   PAGE_PROMPTS,
@@ -8,6 +7,8 @@ import {
   withPromptMode,
   type HidePagePrompts,
 } from '../lib/page-prompts'
+import { ModeSelect } from './ModeSelect'
+import { SettingSwitch } from './SettingSwitch'
 
 interface HidePromptsSettingProps {
   preference: HidePagePrompts
@@ -27,36 +28,23 @@ export function HidePromptsSetting({
       <p className="mt-0.5 text-sm leading-5 text-zinc-600">
         Reminders, meal ratings, referral offers, and invites. Order updates stay.
       </p>
-      <div className="relative mt-3">
-        <select
-          id="hide-extra-prompts"
-          value={preference.mode}
-          onChange={event => {
-            const mode = parsePagePromptMode(event.target.value)
-            if (mode === null) return
-            onChange(withPromptMode(preference, mode))
-          }}
-          className="w-full cursor-pointer appearance-none rounded-xl bg-white py-2 pr-10 pl-3 text-sm font-semibold text-zinc-900 ring-1 ring-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#009900]"
-        >
-          <option value="hide-all">Hide all</option>
-          <option value="show-all">Show all</option>
-          <option value="custom">Custom...</option>
-        </select>
-        <svg
-          viewBox="0 0 16 16"
-          aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 fill-none stroke-zinc-500 stroke-2"
-        >
-          <path d="M4 6.5 8 10.5 12 6.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
+      <ModeSelect
+        id="hide-extra-prompts"
+        value={preference.mode}
+        onChange={value => {
+          const mode = parsePagePromptMode(value)
+          if (mode === null) return
+          onChange(withPromptMode(preference, mode))
+        }}
+      />
       {preference.mode === 'custom' ? (
         <div className="mt-3 flex flex-col gap-2">
           {PAGE_PROMPTS.map(prompt => (
-            <PromptSwitch
+            <SettingSwitch
               key={prompt.id}
               label={prompt.label}
-              hidden={hidden.has(prompt.id)}
+              checked={hidden.has(prompt.id)}
+              ariaLabel={`Hide ${prompt.label}`}
               onToggle={() => {
                 onChange(togglePagePrompt(preference, prompt.id))
               }}
@@ -65,29 +53,5 @@ export function HidePromptsSetting({
         </div>
       ) : null}
     </div>
-  )
-}
-
-function PromptSwitch({
-  label,
-  hidden,
-  onToggle,
-}: {
-  label: string
-  hidden: boolean
-  onToggle: () => void
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={hidden}
-      aria-label={`Hide ${label}`}
-      onClick={onToggle}
-      className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2 text-left ring-1 ring-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#009900]"
-    >
-      <ToggleSwitch on={hidden} />
-      <span className="text-sm font-semibold text-zinc-900">{label}</span>
-    </button>
   )
 }
