@@ -2,6 +2,7 @@ import { useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { browser } from 'wxt/browser'
 import { EvenRestaurantCardsSetting } from '../../components/EvenRestaurantCardsSetting'
 import { HideNewBadgesSetting } from '../../components/HideNewBadgesSetting'
+import { StickyDatePickerSetting } from '../../components/StickyDatePickerSetting'
 import { HideOrderSummarySetting } from '../../components/HideOrderSummarySetting'
 import { HidePromptsSetting } from '../../components/HidePromptsSetting'
 import { RestaurantTileDetailsSetting } from '../../components/RestaurantTileDetailsSetting'
@@ -9,6 +10,7 @@ import { SupportPreference } from '../../components/SupportPreference'
 import { WrapDescriptionsSetting } from '../../components/WrapDescriptionsSetting'
 import { useEvenRestaurantCards } from '../../components/use-even-restaurant-cards'
 import { useHideNewBadges } from '../../components/use-hide-new-badges'
+import { useStickyDatePicker } from '../../components/use-sticky-date-picker'
 import { useRestaurantTileDetails } from '../../components/use-restaurant-tile-details'
 import { useHideOrderSummary } from '../../components/use-hide-order-summary'
 import { useHidePagePrompts } from '../../components/use-hide-page-prompts'
@@ -31,6 +33,7 @@ export default function App(): ReactElement {
   const { wrapLongDescriptions, setWrapLongDescriptions } = useWrapLongDescriptions()
   const { evenRestaurantCards, setEvenRestaurantCards } = useEvenRestaurantCards()
   const { hideNewBadges, setHideNewBadges } = useHideNewBadges()
+  const { stickyDatePicker, setStickyDatePicker } = useStickyDatePicker()
   const { details: restaurantTileDetails, setDetails: setRestaurantTileDetails } =
     useRestaurantTileDetails()
   const [tab, setTab] = useState<PopupTab>('support')
@@ -145,6 +148,7 @@ export default function App(): ReactElement {
               }}
             />
             <HideNewBadgesSetting enabled={hideNewBadges} onChange={setHideNewBadges} />
+            <StickyDatePickerSetting enabled={stickyDatePicker} onChange={setStickyDatePicker} />
           </>
         ) : null}
       </div>

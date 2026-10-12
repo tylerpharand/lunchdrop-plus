@@ -58,7 +58,7 @@ export async function rememberSupportOrigin(
   return fee
 }
 
-const ORDER_CHOICE_KEY = 'supportOrderChoices'
+export const ORDER_CHOICE_KEY = 'supportOrderChoices'
 
 const orderChoiceCache = new Map<string, OrderChoiceMemory | null>()
 
@@ -83,6 +83,24 @@ export async function readOrderChoice(orderId: string): Promise<OrderChoiceMemor
     if (!orderChoiceCache.has(orderId)) orderChoiceCache.set(orderId, null)
     return orderChoiceCache.get(orderId) ?? null
   }
+}
+
+/** Stored choices, with this page's latest writes winning over a save still in flight. */
+export async function readOrderChoices(): Promise<Record<string, OrderChoiceMemory>> {
+  const stored = await browser.storage.local.get(ORDER_CHOICE_KEY)
+  const choices = stored[ORDER_CHOICE_KEY]
+  const next: Record<string, OrderChoiceMemory> = {}
+  if (isChoiceRecord(choices)) {
+    for (const [id, value] of Object.entries(choices)) {
+      if (orderChoiceCache.get(id) === null) continue
+      const parsed = parseOrderChoiceMemory(value)
+      if (parsed !== null) next[id] = parsed
+    }
+  }
+  for (const [id, value] of orderChoiceCache) {
+    if (value !== null) next[id] = value
+  }
+  return next
 }
 
 /** `null` forgets the choice. A later read in this page keeps the write. */

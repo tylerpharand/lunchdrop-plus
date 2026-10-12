@@ -22,6 +22,9 @@ ${GRID} .pb-2:not(:has(> .mt-2:not([${HIDDEN_ATTR}="true"]))) {
   padding-bottom: 0;
 }
 ${GRID} { gap: ${TIGHT_GAP}; }
+${GRID} a > div.border-2.rounded-md {
+  border-radius: 12px !important;
+}
 a:has([${PLACED_ATTR}="true"]) > div.border-2 {
   border-color: #009900 !important;
 }

@@ -51,7 +51,7 @@ export function SupportModal({
   const closeTimer = useRef<number | null>(null)
   const [closing, setClosing] = useState(false)
   const compact = useCompactViewport()
-  const animateRemember = useSwitchMotion(showRemember)
+  const animateRemember = useSwitchMotion(showRemember, selection.choice !== null)
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow

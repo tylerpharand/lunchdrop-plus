@@ -216,21 +216,23 @@ export function feesMatch(left: number, right: number): boolean {
 }
 
 export interface SupportOverrideMarks {
-  /** Support amounts where every order showing that fee was replaced. */
+  /** Support amounts where every order showing that fee uses the override styling. */
   amounts: ReadonlySet<string>
-  /** `support|amountDue` for an order whose fee was replaced. */
+  /** `support|amountDue` for an order that uses the override styling. */
   precise: ReadonlySet<string>
-  /** `support|amountDue` shared with an order Lunchdrop still owns. */
+  /** `support|amountDue` shared with an order that keeps Lunchdrop's styling. */
   blocked: ReadonlySet<string>
 }
 
 /**
- * Which on-screen support amounts were replaced.
+ * Which on-screen support amounts use the override styling.
+ * A fee that differs from Lunchdrop's does. $0.00 does too, unless Custom is selected.
  * Amount due separates two orders that show the same support fee.
  */
 export function supportOverrideMarks(
   orders: readonly Pick<PlacedOrder, 'id' | 'supportFee' | 'amountDue'>[],
-  origins: Readonly<Record<string, number>>
+  origins: Readonly<Record<string, number>>,
+  customOrderIds: ReadonlySet<string>
 ): SupportOverrideMarks {
   const seen = new Set<string>()
   const byAmount = new Map<string, { shown: number; overridden: number }>()
@@ -242,8 +244,7 @@ export function supportOverrideMarks(
     seen.add(order.id)
     const amount = formatDollars(order.supportFee)
     const key = `${amount}|${formatDollars(order.amountDue)}`
-    const origin = origins[order.id]
-    const overridden = typeof origin === 'number' && !feesMatch(origin, order.supportFee)
+    const overridden = supportFeeOverridden(order, origins, customOrderIds)
     const bucket = byAmount.get(amount) ?? { shown: 0, overridden: 0 }
     bucket.shown += 1
     if (overridden) bucket.overridden += 1
@@ -261,6 +262,17 @@ export function supportOverrideMarks(
     if (bucket.overridden > 0 && bucket.overridden === bucket.shown) amounts.add(amount)
   }
   return { amounts, precise, blocked }
+}
+
+/** Lunchdrop's fee was replaced, or the fee is $0.00 and Custom is not selected. */
+function supportFeeOverridden(
+  order: Pick<PlacedOrder, 'id' | 'supportFee'>,
+  origins: Readonly<Record<string, number>>,
+  customOrderIds: ReadonlySet<string>
+): boolean {
+  const origin = origins[order.id]
+  if (typeof origin === 'number' && !feesMatch(origin, order.supportFee)) return true
+  return feesMatch(order.supportFee, 0) && !customOrderIds.has(order.id)
 }
 
 export function supportAmountOverridden(

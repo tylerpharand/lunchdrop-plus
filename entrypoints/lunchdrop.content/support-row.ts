@@ -1,12 +1,19 @@
+import { browser } from 'wxt/browser'
 import {
   formatDollars,
   LUNCHBOT_SOURCE,
   orderSupportFromMessage,
   supportAmountOverridden,
   supportOverrideMarks,
+  type OrderChoiceMemory,
+  type OrderSupportChoice,
   type SupportOverrideMarks,
 } from '../../lib/support-policy'
-import { readSupportOrigins } from '../../lib/support-policy-storage'
+import {
+  ORDER_CHOICE_KEY,
+  readOrderChoices,
+  readSupportOrigins,
+} from '../../lib/support-policy-storage'
 import { openSupportModal } from './open'
 
 const STYLE_ID = 'lunchbot-support-override-style'
@@ -45,6 +52,20 @@ let marks: SupportOverrideMarks = {
 }
 let generation = 0
 let refreshTimer: number | null = null
+let liveSupportChoice: { orderId: string; choice: OrderSupportChoice } | null = null
+
+/** The open modal's choice. Cleared when the modal closes so the saved choice applies. */
+export function setLiveSupportChoice(
+  orderId: string | null,
+  choice: OrderSupportChoice | null
+): void {
+  const next = orderId !== null && choice !== null ? { orderId, choice } : null
+  if (liveSupportChoice?.orderId === next?.orderId && liveSupportChoice?.choice === next?.choice) {
+    return
+  }
+  liveSupportChoice = next
+  refreshSupportOverrideMarks()
+}
 
 export function startSupportOverrideMarks(): () => void {
   const onMessage = (event: MessageEvent): void => {
@@ -52,13 +73,18 @@ export function startSupportOverrideMarks(): () => void {
     const context = orderSupportFromMessage(event.data)
     if (context === undefined) return
     const current = ++generation
-    void readSupportOrigins().then(origins => {
+    void Promise.all([readSupportOrigins(), readOrderChoices()]).then(([origins, choices]) => {
       if (current !== generation) return
-      marks = supportOverrideMarks(context.orders, origins)
+      marks = supportOverrideMarks(context.orders, origins, customOrderIds(choices))
       injectSupportRow()
     })
   }
+  const onChoiceStored = (changes: Record<string, { newValue?: unknown }>): void => {
+    if (changes[ORDER_CHOICE_KEY] === undefined) return
+    refreshSupportOverrideMarks()
+  }
   window.addEventListener('message', onMessage)
+  browser.storage.onChanged.addListener(onChoiceStored)
   const retries = [
     window.setTimeout(refreshSupportOverrideMarks, 400),
     window.setTimeout(refreshSupportOverrideMarks, 1200),
@@ -66,6 +92,7 @@ export function startSupportOverrideMarks(): () => void {
   refreshSupportOverrideMarks()
   return () => {
     window.removeEventListener('message', onMessage)
+    browser.storage.onChanged.removeListener(onChoiceStored)
     if (refreshTimer !== null) window.clearTimeout(refreshTimer)
     for (const timer of retries) window.clearTimeout(timer)
   }
@@ -123,6 +150,17 @@ export function injectSupportRow(): void {
     syncOverridePrice(link, dollarLabel(link.textContent), amountDueLabel(row))
   }
   removeLooseBolts()
+}
+
+function customOrderIds(choices: Readonly<Record<string, OrderChoiceMemory>>): Set<string> {
+  const ids = new Set<string>()
+  for (const [orderId, memory] of Object.entries(choices)) {
+    if (memory.choice === 'custom') ids.add(orderId)
+  }
+  if (liveSupportChoice === null) return ids
+  if (liveSupportChoice.choice === 'custom') ids.add(liveSupportChoice.orderId)
+  else ids.delete(liveSupportChoice.orderId)
+  return ids
 }
 
 function supportRows(): HTMLTableRowElement[] {

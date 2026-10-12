@@ -25,6 +25,7 @@ import {
   writeOrderChoice,
 } from '../../lib/support-policy-storage'
 import { onSupportModalOpen } from './open'
+import { setLiveSupportChoice } from './support-row'
 import { pickOrder, postSupportFee, subsidyForOrder } from './support-fee-client'
 
 interface SelectionSnap {
@@ -199,6 +200,16 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
     setRemember(next.remember)
     setCustomAmount(formatted)
   }, [open, order, baseline, baselineKnown, pinKnown, pinned, policy, subsidyCap, subsidyRemaining])
+
+  useEffect(() => {
+    if (!open || activeOrderId === null || choice === null) return
+    setLiveSupportChoice(activeOrderId, choice)
+  }, [open, activeOrderId, choice])
+
+  useEffect(() => {
+    if (open) return
+    setLiveSupportChoice(null, null)
+  }, [open])
 
   if (!open) return null
 

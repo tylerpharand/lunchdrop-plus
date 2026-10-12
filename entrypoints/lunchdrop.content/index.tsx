@@ -52,10 +52,16 @@ import {
 } from '../../lib/restaurant-tile-details-storage'
 import { defaultHideNewBadges, parseHideNewBadges } from '../../lib/new-badges'
 import { HIDE_NEW_BADGES_STORAGE_KEY, readHideNewBadges } from '../../lib/new-badges-storage'
+import { defaultStickyDatePicker, parseStickyDatePicker } from '../../lib/sticky-date-picker'
+import {
+  readStickyDatePicker,
+  STICKY_DATE_PICKER_STORAGE_KEY,
+} from '../../lib/sticky-date-picker-storage'
 import { browser } from 'wxt/browser'
 import PageApp from './App'
 import { removeEvenRestaurantCards, syncEvenRestaurantCards } from './even-restaurant-cards'
 import { removeHideNewBadges, syncHideNewBadges } from './new-badges'
+import { removeStickyDatePicker, syncStickyDatePicker } from './sticky-date-picker'
 import { removeRestaurantTileDetails, syncRestaurantTileDetails } from './restaurant-tile-details'
 import {
   ensureOrderSummaryStyles,
@@ -98,6 +104,7 @@ export default defineContentScript({
     let evenRestaurantCards = defaultEvenRestaurantCards()
     let restaurantTileDetails: RestaurantTileDetails = defaultRestaurantTileDetails()
     let hideNewBadges = defaultHideNewBadges()
+    let stickyDatePicker = defaultStickyDatePicker()
     let observer: MutationObserver | null = null
     const stopOverrideMarks = startSupportOverrideMarks()
 
@@ -195,6 +202,16 @@ export default defineContentScript({
       syncHideNewBadges(hideNewBadges)
     })
 
+    watchStored(
+      STICKY_DATE_PICKER_STORAGE_KEY,
+      parseStickyDatePicker,
+      readStickyDatePicker,
+      value => {
+        stickyDatePicker = value
+        syncStickyDatePicker(stickyDatePicker)
+      }
+    )
+
     const start = (): void => {
       ensurePromptStyles()
       ensureOrderSummaryStyles()
@@ -202,6 +219,7 @@ export default defineContentScript({
       syncEvenRestaurantCards(evenRestaurantCards)
       syncRestaurantTileDetails(restaurantTileDetails)
       syncHideNewBadges(hideNewBadges)
+      syncStickyDatePicker(stickyDatePicker)
       injectSupportRow()
       syncMiscPrompts(hidePrompts)
       syncOrderSummary(hideOrderSummary)
@@ -213,6 +231,7 @@ export default defineContentScript({
         syncOrderSummary(hideOrderSummary)
         syncRestaurantTileDetails(restaurantTileDetails)
         syncHideNewBadges(hideNewBadges)
+        syncStickyDatePicker(stickyDatePicker)
         refreshSupportOverrideMarks()
         observer?.observe(document.body, { childList: true, subtree: true })
       }
@@ -236,6 +255,7 @@ export default defineContentScript({
       removeEvenRestaurantCards()
       removeRestaurantTileDetails()
       removeHideNewBadges()
+      removeStickyDatePicker()
     })
   },
 })
