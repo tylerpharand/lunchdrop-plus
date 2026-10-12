@@ -2,7 +2,7 @@
   "name": "lunchdrop-plus",
   "description": "Tools for Lunchdrop.",
   "private": true,
-  "version": "1.5.2",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
