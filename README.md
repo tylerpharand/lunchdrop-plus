@@ -13,11 +13,11 @@ Quality of life improvements for [Lunchdrop](https://lunchdrop.com/).
 
 Download a build from the [latest release](https://github.com/tylerpharand/lunchdrop-plus/releases/latest).
 
-| Browser        | Status           |
-| -------------- | ---------------- |
-| Chrome         | ✅ Supported     |
-| Firefox        | ✅ Supported     |
-| Firefox Mobile | ✅ Supported     |
-| Chrome Mobile  | ❌ Not supported |
-| Safari         | 🔜 Coming soon   |
-| Safari Mobile  | 🔜 Coming soon   |
+| Browser           | Status           | Installation                                         |
+| ----------------- | ---------------- | ---------------------------------------------------- |
+| Chrome (Desktop)  | ✅ Supported     | [Instructions](docs/installation.md#chrome-desktop)  |
+| Chrome (Mobile)   | ❌ Not supported | —                                                    |
+| Firefox (Desktop) | ✅ Supported     | [Instructions](docs/installation.md#firefox-desktop) |
+| Firefox (Mobile)  | ✅ Supported     | [Instructions](docs/installation.md#firefox-mobile)  |
+| Safari (Desktop)  | 🔜 Coming soon   | —                                                    |
+| Safari (Mobile)   | 🔜 Coming soon   | —                                                    |
