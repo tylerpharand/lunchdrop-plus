@@ -12,14 +12,22 @@ import {
   orderSupportFromMessage,
   parseSupportAmount,
   quotedSupportFee,
+  subsidyRemainingForOrder,
   supportFeeResultFromMessage,
+  type OrderChoiceMemory,
   type OrderSupportChoice,
   type OrderSupportContext,
   type PlacedOrder,
   type SupportChoiceMode,
+  type SupportPolicy,
   type SupportQuote,
 } from '../../lib/support-policy'
-import { readSupportOrigin } from '../../lib/support-policy-storage'
+import {
+  peekOrderChoice,
+  readOrderChoice,
+  readSupportOrigin,
+  writeOrderChoice,
+} from '../../lib/support-policy-storage'
 import { onSupportModalOpen } from './open'
 
 interface SelectionSnap {
@@ -50,6 +58,8 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
     mode: SupportChoiceMode
     tick: number
   } | null>(null)
+  const [loadedPin, setLoadedPin] = useState<OrderChoiceMemory | null>(null)
+  const [loadedPinId, setLoadedPinId] = useState<string | null>(null)
   const confirmTick = useRef(0)
   const applyTimer = useRef<number | null>(null)
   const applyGeneration = useRef(0)
@@ -60,6 +70,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
   const lastValidCustom = useRef('')
   const burstPrevious = useRef<SelectionSnap | null>(null)
   const ignoreCustomCommit = useRef(false)
+  const rememberHeldOff = useRef(false)
 
   useEffect(() => {
     onOpenChange(open)
@@ -75,6 +86,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
         lastValidCustom.current = ''
         burstPrevious.current = null
         ignoreCustomCommit.current = false
+        rememberHeldOff.current = false
         setRemember(false)
         setChoice(null)
         setPercent(policyRef.current.percent)
@@ -146,11 +158,30 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
       ? null
       : (context.orders.find(item => item.id === orderId) ??
         pickOrder(context.orders, supportLabel, null))
-  const subsidyRemaining = context?.subsidy?.remaining ?? null
-  const subsidyCap = context?.subsidy?.cap ?? null
+  const orderSubsidy = subsidyForOrder(context, order)
+  const subsidyRemaining = orderSubsidy?.remaining ?? null
+  const subsidyCap = orderSubsidy?.cap ?? null
+  const activeOrderId = order?.id ?? null
+  const peekedPin = activeOrderId === null ? undefined : peekOrderChoice(activeOrderId)
+  const pinKnown =
+    activeOrderId !== null && (peekedPin !== undefined || loadedPinId === activeOrderId)
+  const pinned = peekedPin !== undefined ? peekedPin : loadedPin
 
   useEffect(() => {
-    if (!open || order === null || !baselineKnown || selectionEdited.current) return
+    if (!open || activeOrderId === null || peekOrderChoice(activeOrderId) !== undefined) return
+    let cancelled = false
+    void readOrderChoice(activeOrderId).then(pin => {
+      if (cancelled) return
+      setLoadedPin(pin)
+      setLoadedPinId(activeOrderId)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open, activeOrderId])
+
+  useEffect(() => {
+    if (!open || order === null || !baselineKnown || !pinKnown || selectionEdited.current) return
     const liveQuote: SupportQuote = {
       itemsSubtotal: order.itemsSubtotal,
       baselineFee: baseline,
@@ -161,7 +192,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
           : { cap: subsidyCap, remaining: subsidyRemaining },
     }
     const currentFee = serverFee.current ?? order.supportFee
-    const next = inferOrderSupport(policy, currentFee, liveQuote)
+    const next = inferOrderSupport(policy, currentFee, liveQuote, pinned)
     const fieldAmount =
       next.choice === 'custom' ? currentFee : customSupportSeed(currentFee, liveQuote)
     const formatted = formatSupportAmount(fieldAmount)
@@ -170,7 +201,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
     setPercent(next.percent)
     setRemember(next.remember)
     setCustomAmount(formatted)
-  }, [open, order, baseline, baselineKnown, policy, subsidyCap, subsidyRemaining])
+  }, [open, order, baseline, baselineKnown, pinKnown, pinned, policy, subsidyCap, subsidyRemaining])
 
   if (!open) return null
 
@@ -181,16 +212,40 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
           itemsSubtotal: order.itemsSubtotal,
           baselineFee: baseline,
           baselineKnown,
-          subsidy: context?.subsidy ?? null,
+          subsidy: orderSubsidy,
         }
 
   const snap = (): SelectionSnap => ({ choice, percent, customAmount })
 
+  const rememberAppliedChoice = (next: SelectionSnap, fee: number): void => {
+    if (order === null || next.choice === null) return
+    const memory: OrderChoiceMemory = {
+      choice: next.choice,
+      percent: next.percent,
+      amount: fee,
+    }
+    writeOrderChoice(order.id, memory)
+    setLoadedPin(memory)
+    setLoadedPinId(order.id)
+    if (next.choice === 'custom' || rememberHeldOff.current) return
+    const current = policyRef.current
+    if (orderChoiceMatchesPolicy(next.choice, next.percent, current)) return
+    const nextPolicy: SupportPolicy =
+      next.choice === 'percent'
+        ? { mode: 'percent', percent: next.percent }
+        : { mode: next.choice, percent: current.percent }
+    setPolicy(nextPolicy)
+  }
+
   const postFee = (fee: number, next: SelectionSnap, previous: SelectionSnap): void => {
-    if (next.choice === null || order?.deliveryId === undefined) return
+    if (next.choice === null || order === null) return
     const pendingChoice = next.choice
     const currentFee = serverFee.current ?? order.supportFee
-    if (feesMatch(fee, currentFee)) return
+    if (feesMatch(fee, currentFee)) {
+      rememberAppliedChoice(next, fee)
+      return
+    }
+    if (order.deliveryId === undefined) return
     const generation = applyGeneration.current + 1
     applyGeneration.current = generation
     const previousFee = currentFee
@@ -213,6 +268,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
           )
           return
         }
+        rememberAppliedChoice(next, fee)
         confirmTick.current += 1
         setConfirmed({ mode: pendingChoice, tick: confirmTick.current })
       } finally {
@@ -269,7 +325,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
       return
     }
     setChoice(nextChoice)
-    setRemember(orderChoiceMatchesPolicy(nextChoice, percent, policy))
+    setRemember(!rememberHeldOff.current)
     schedulePreset(nextChoice, percent, previous)
   }
 
@@ -282,7 +338,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
     const previous = snap()
     setChoice('percent')
     setPercent(nextPercent)
-    setRemember(orderChoiceMatchesPolicy('percent', nextPercent, policy))
+    setRemember(!rememberHeldOff.current)
     schedulePreset('percent', nextPercent, previous)
   }
 
@@ -323,6 +379,7 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
   const onRememberChange = (next: boolean): void => {
     if (choice === null || choice === 'custom') return
     selectionEdited.current = true
+    rememberHeldOff.current = !next
     setRemember(next)
     if (next) {
       setPolicy(
@@ -355,6 +412,19 @@ export default function PageApp({ onOpenChange }: PageAppProps): ReactElement | 
       onClose={close}
     />
   )
+}
+
+function subsidyForOrder(
+  context: OrderSupportContext | null,
+  order: PlacedOrder | null
+): SupportQuote['subsidy'] {
+  if (order === null) return null
+  if (context === null) return null
+  if (context.subsidy === null) return null
+  return subsidyRemainingForOrder(context.subsidy.cap, context.orders, {
+    id: order.id,
+    itemsSubtotal: order.itemsSubtotal,
+  })
 }
 
 function pickOrder(

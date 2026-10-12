@@ -433,10 +433,17 @@ function readSubsidySnapshot(placed: PlacedOrder | null): SubsidySnapshot | null
   const cap = field(day, 'subsidyCap')
   const orders = field(day, 'orders')
   if (placed === null) return subsidySnapshotFromDay(cap, orders)
-  return subsidyRemainingForOrder(cap, orders, { id: placed.id, subsidy: placed.subsidy })
+  return subsidyRemainingForOrder(cap, orders, {
+    id: placed.id,
+    itemsSubtotal: placed.itemsSubtotal,
+  })
 }
 
 function readAccount(): Record<string, unknown> | null {
+  return readPiniaSlice('account')
+}
+
+function readPiniaSlice(name: string): Record<string, unknown> | null {
   const app = document.querySelector('#app')
   if (app === null) return null
   const vue = asRecord(field(asRecord(app) ?? {}, '__vue_app__'))
@@ -445,7 +452,7 @@ function readAccount(): Record<string, unknown> | null {
   const pinia = asRecord(field(globals ?? {}, '$pinia'))
   const state = asRecord(field(pinia ?? {}, 'state'))
   const value = asRecord(field(state ?? {}, 'value'))
-  return asRecord(field(value ?? {}, 'account'))
+  return asRecord(field(value ?? {}, name))
 }
 
 function readCurrentLunchday(): Record<string, unknown> | null {

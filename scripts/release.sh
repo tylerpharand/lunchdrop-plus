@@ -10,8 +10,10 @@ Usage: yarn release <version> [--dry-run]
 
 The release checks origin and gh auth, requires a clean worktree, sets the
 package.json version, runs yarn verify, zips Chrome and Firefox, commits that
-version, pushes, and creates GitHub release v<version> with both zips. The
-Firefox Add-on workflow then submits the Firefox build to addons.mozilla.org.
+version, pushes, and creates GitHub release v<version> with the Chrome zip.
+The Firefox zip is a build check and is not published. The Firefox Add-on
+workflow then submits the Firefox build to addons.mozilla.org and attaches
+lunchdrop-plus-<version>-firefox.xpi.
 
 --dry-run builds the zips and leaves package.json unchanged.
 EOF
@@ -156,8 +158,9 @@ if [[ ! -f "$CHROME_ZIP" || ! -f "$FIREFOX_ZIP" ]]; then
 fi
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  echo "Dry run. Zips:"
+  echo "Dry run. Chrome zip:"
   echo "  ${CHROME_ZIP}"
+  echo "Firefox zip built and not published:"
   echo "  ${FIREFOX_ZIP}"
   exit 0
 fi
@@ -175,14 +178,14 @@ COMMITTED=1
 if ! git push -u origin HEAD; then
   echo "The version commit is only local. Push it, then create the release:" >&2
   echo "  git push -u origin HEAD" >&2
-  echo "  gh release create ${TAG} --target $(git branch --show-current) --title \"Lunchdrop+ ${VERSION}\" ${CHROME_ZIP} ${FIREFOX_ZIP}" >&2
+  echo "  gh release create ${TAG} --target $(git branch --show-current) --title \"Lunchdrop+ ${VERSION}\" ${CHROME_ZIP}" >&2
   exit 1
 fi
 
 NOTES="$(cat <<EOF
-Chrome package for manual install. The Firefox zip is the build submitted to addons.mozilla.org. The signed package is attached when signing finishes.
+Chrome package for manual install. It does not auto-update. Chrome and Arc update from the Chrome Web Store, including an unlisted listing.
 
-These files do not auto-update. Chrome and Arc update from the Chrome Web Store, including an unlisted listing. Each release submits the Firefox build to addons.mozilla.org as an unlisted add-on.
+The signed Firefox package is attached as lunchdrop-plus-${VERSION}-firefox.xpi when addons.mozilla.org finishes signing. That file installs on desktop Firefox and Firefox for Android.
 EOF
 )"
 
@@ -190,10 +193,9 @@ if ! gh release create "$TAG" \
   --target "$(git branch --show-current)" \
   --title "Lunchdrop+ ${VERSION}" \
   --notes "$NOTES" \
-  "$CHROME_ZIP" \
-  "$FIREFOX_ZIP"; then
+  "$CHROME_ZIP"; then
   echo "The version commit is on origin. Create the release with:" >&2
-  echo "  gh release create ${TAG} --target $(git branch --show-current) --title \"Lunchdrop+ ${VERSION}\" ${CHROME_ZIP} ${FIREFOX_ZIP}" >&2
+  echo "  gh release create ${TAG} --target $(git branch --show-current) --title \"Lunchdrop+ ${VERSION}\" ${CHROME_ZIP}" >&2
   exit 1
 fi
 

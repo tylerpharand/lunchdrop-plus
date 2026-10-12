@@ -56,4 +56,16 @@ jobs:
       - name: Attach signed package
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" .output/amo/*.xpi
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          shopt -s nullglob
+          xpis=(.output/amo/*.xpi)
+          if [[ ${#xpis[@]} -ne 1 ]]; then
+            echo "Expected one signed xpi, found ${#xpis[@]}." >&2
+            exit 1
+          fi
+          dest=".output/amo/lunchdrop-plus-${version}-firefox.xpi"
+          if [[ "${xpis[0]}" != "$dest" ]]; then
+            mv "${xpis[0]}" "$dest"
+          fi
+          gh release upload "${{ github.event.release.tag_name }}" "$dest"

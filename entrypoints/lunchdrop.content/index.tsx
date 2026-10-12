@@ -41,9 +41,22 @@ import {
   EVEN_RESTAURANT_CARDS_STORAGE_KEY,
   readEvenRestaurantCards,
 } from '../../lib/even-restaurant-cards-storage'
+import {
+  defaultRestaurantTileDetails,
+  parseRestaurantTileDetails,
+  type RestaurantTileDetails,
+} from '../../lib/restaurant-tile-details'
+import {
+  readRestaurantTileDetails,
+  RESTAURANT_TILE_DETAILS_STORAGE_KEY,
+} from '../../lib/restaurant-tile-details-storage'
+import { defaultHideNewBadges, parseHideNewBadges } from '../../lib/new-badges'
+import { HIDE_NEW_BADGES_STORAGE_KEY, readHideNewBadges } from '../../lib/new-badges-storage'
 import { browser } from 'wxt/browser'
 import PageApp from './App'
 import { removeEvenRestaurantCards, syncEvenRestaurantCards } from './even-restaurant-cards'
+import { removeHideNewBadges, syncHideNewBadges } from './new-badges'
+import { removeRestaurantTileDetails, syncRestaurantTileDetails } from './restaurant-tile-details'
 import {
   ensureOrderSummaryStyles,
   removeOrderSummaryStyles,
@@ -69,6 +82,8 @@ export default defineContentScript({
     let hideOrderSummary: HideOrderSummary = defaultHideOrderSummary()
     let wrapLongDescriptions = defaultWrapLongDescriptions()
     let evenRestaurantCards = defaultEvenRestaurantCards()
+    let restaurantTileDetails: RestaurantTileDetails = defaultRestaurantTileDetails()
+    let hideNewBadges = defaultHideNewBadges()
     let observer: MutationObserver | null = null
     const stopOverrideMarks = startSupportOverrideMarks()
 
@@ -140,6 +155,16 @@ export default defineContentScript({
         evenRestaurantCards = parseEvenRestaurantCards(evenChange.newValue)
         if (document.readyState !== 'loading') syncEvenRestaurantCards(evenRestaurantCards)
       }
+      const tileChange = changes[RESTAURANT_TILE_DETAILS_STORAGE_KEY]
+      if (tileChange !== undefined) {
+        restaurantTileDetails = parseRestaurantTileDetails(tileChange.newValue)
+        syncRestaurantTileDetails(restaurantTileDetails)
+      }
+      const newBadgeChange = changes[HIDE_NEW_BADGES_STORAGE_KEY]
+      if (newBadgeChange !== undefined) {
+        hideNewBadges = parseHideNewBadges(newBadgeChange.newValue)
+        syncHideNewBadges(hideNewBadges)
+      }
     })
 
     void readHidePagePrompts().then(value => {
@@ -164,11 +189,23 @@ export default defineContentScript({
       syncEvenRestaurantCards(evenRestaurantCards)
     })
 
+    void readRestaurantTileDetails().then(value => {
+      restaurantTileDetails = value
+      syncRestaurantTileDetails(restaurantTileDetails)
+    })
+
+    void readHideNewBadges().then(value => {
+      hideNewBadges = value
+      syncHideNewBadges(hideNewBadges)
+    })
+
     const start = (): void => {
       ensurePromptStyles()
       ensureOrderSummaryStyles()
       syncWrapLongDescriptions(wrapLongDescriptions)
       syncEvenRestaurantCards(evenRestaurantCards)
+      syncRestaurantTileDetails(restaurantTileDetails)
+      syncHideNewBadges(hideNewBadges)
       injectSupportRow()
       syncMiscPrompts(hidePrompts)
       syncOrderSummary(hideOrderSummary)
@@ -178,6 +215,8 @@ export default defineContentScript({
         injectSupportRow()
         syncMiscPrompts(hidePrompts)
         syncOrderSummary(hideOrderSummary)
+        syncRestaurantTileDetails(restaurantTileDetails)
+        syncHideNewBadges(hideNewBadges)
         refreshSupportOverrideMarks()
         observer?.observe(document.body, { childList: true, subtree: true })
       }
@@ -199,6 +238,8 @@ export default defineContentScript({
       removeOrderSummaryStyles()
       removeWrapLongDescriptions()
       removeEvenRestaurantCards()
+      removeRestaurantTileDetails()
+      removeHideNewBadges()
     })
   },
 })

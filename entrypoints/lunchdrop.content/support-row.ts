@@ -15,10 +15,26 @@ const ORIGINAL_LABEL = 'Help support us'
 const SUPPORT_LABEL = ' Support: '
 const REFRESH_MS = 50
 
+const BOLT_MARK = 'lunchbotSupportBolt'
+
 const OVERRIDE_CSS = `
   [data-lunchbot-support-overridden="true"] {
     font-weight: 700;
     font-style: italic;
+  }
+
+  svg[data-lunchbot-support-bolt] {
+    display: inline-block;
+    width: 0.85em;
+    height: 0.85em;
+    margin-right: 0.16em;
+    vertical-align: -0.1em;
+    cursor: pointer;
+    fill: #009900;
+  }
+
+  svg[data-lunchbot-support-bolt] path {
+    fill: #009900;
   }
 `
 
@@ -79,6 +95,7 @@ export function removeSupportRow(): void {
     link.removeAttribute('aria-label')
     delete link.dataset['lunchbotSupportOverridden']
   }
+  for (const bolt of document.querySelectorAll('svg[data-lunchbot-support-bolt]')) bolt.remove()
   for (const label of document.querySelectorAll('[data-lunchbot-support-overridden="true"]')) {
     if (!(label instanceof HTMLElement)) continue
     delete label.dataset['lunchbotSupportOverridden']
@@ -105,6 +122,7 @@ export function injectSupportRow(): void {
     }
     syncOverridePrice(link, dollarLabel(link.textContent), amountDueLabel(row))
   }
+  removeLooseBolts()
 }
 
 function supportRows(): HTMLTableRowElement[] {
@@ -145,9 +163,56 @@ function syncOverridePrice(
     supportAmount !== null && supportAmountOverridden(marks, supportAmount, amountDue)
   if (overridden) {
     link.dataset['lunchbotSupportOverridden'] = 'true'
+  } else {
+    delete link.dataset['lunchbotSupportOverridden']
+  }
+  syncOverrideBolt(link, overridden)
+}
+
+function syncOverrideBolt(link: HTMLAnchorElement, overridden: boolean): void {
+  const bolt = boltBeside(link)
+  if (!overridden) {
+    bolt?.remove()
     return
   }
-  delete link.dataset['lunchbotSupportOverridden']
+  if (bolt !== null) return
+  const next = supportBolt()
+  link.before(next)
+  bindOpen(next, link)
+}
+
+function boltBeside(link: HTMLAnchorElement): SVGSVGElement | null {
+  const previous = link.previousElementSibling
+  if (!(previous instanceof SVGSVGElement)) return null
+  if (previous.dataset[BOLT_MARK] !== 'true') return null
+  return previous
+}
+
+function removeLooseBolts(): void {
+  for (const node of document.querySelectorAll('svg[data-lunchbot-support-bolt]')) {
+    const next = node.nextElementSibling
+    if (next instanceof HTMLAnchorElement && next.dataset['lunchbotSupportOverridden'] === 'true') {
+      continue
+    }
+    node.remove()
+  }
+}
+
+function supportBolt(): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.dataset[BOLT_MARK] = 'true'
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('fill', '#009900')
+  path.setAttribute('fill-rule', 'evenodd')
+  path.setAttribute('clip-rule', 'evenodd')
+  path.setAttribute(
+    'd',
+    'M14.615 1.595a.75.75 0 0 1 .359.852L12.982 9.75h7.268a.75.75 0 0 1 .548 1.262l-10.5 11.25a.75.75 0 0 1-1.272-.71l1.992-7.302H3.75a.75.75 0 0 1-.548-1.262l10.5-11.25a.75.75 0 0 1 .913-.143Z'
+  )
+  svg.append(path)
+  return svg
 }
 
 function amountDueLabel(row: HTMLTableRowElement): string | null {
@@ -188,7 +253,7 @@ function clearLegacyBadges(): void {
   }
 }
 
-function bindOpen(element: HTMLElement, link: HTMLAnchorElement): void {
+function bindOpen(element: HTMLElement | SVGElement, link: HTMLAnchorElement): void {
   if (element.dataset['lunchbotSupportOpen'] === 'true') return
   element.dataset['lunchbotSupportOpen'] = 'true'
   element.addEventListener(

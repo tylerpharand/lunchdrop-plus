@@ -1,11 +1,15 @@
 import { useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { browser } from 'wxt/browser'
 import { EvenRestaurantCardsSetting } from '../../components/EvenRestaurantCardsSetting'
+import { HideNewBadgesSetting } from '../../components/HideNewBadgesSetting'
 import { HideOrderSummarySetting } from '../../components/HideOrderSummarySetting'
 import { HidePromptsSetting } from '../../components/HidePromptsSetting'
+import { RestaurantTileDetailsSetting } from '../../components/RestaurantTileDetailsSetting'
 import { SupportPreference } from '../../components/SupportPreference'
 import { WrapDescriptionsSetting } from '../../components/WrapDescriptionsSetting'
 import { useEvenRestaurantCards } from '../../components/use-even-restaurant-cards'
+import { useHideNewBadges } from '../../components/use-hide-new-badges'
+import { useRestaurantTileDetails } from '../../components/use-restaurant-tile-details'
 import { useHideOrderSummary } from '../../components/use-hide-order-summary'
 import { useHidePagePrompts } from '../../components/use-hide-page-prompts'
 import { useSupportPolicy } from '../../components/use-support-policy'
@@ -26,6 +30,9 @@ export default function App(): ReactElement {
   const { preference: orderSummary, setPreference: setOrderSummary } = useHideOrderSummary()
   const { wrapLongDescriptions, setWrapLongDescriptions } = useWrapLongDescriptions()
   const { evenRestaurantCards, setEvenRestaurantCards } = useEvenRestaurantCards()
+  const { hideNewBadges, setHideNewBadges } = useHideNewBadges()
+  const { details: restaurantTileDetails, setDetails: setRestaurantTileDetails } =
+    useRestaurantTileDetails()
   const [tab, setTab] = useState<PopupTab>('support')
   const tabRefs = useRef(new Map<PopupTab, HTMLButtonElement>())
 
@@ -131,6 +138,13 @@ export default function App(): ReactElement {
               enabled={evenRestaurantCards}
               onChange={setEvenRestaurantCards}
             />
+            <RestaurantTileDetailsSetting
+              enabled={restaurantTileDetails.enhanced}
+              onChange={enhanced => {
+                setRestaurantTileDetails({ enhanced })
+              }}
+            />
+            <HideNewBadgesSetting enabled={hideNewBadges} onChange={setHideNewBadges} />
           </>
         ) : null}
       </div>

@@ -12,6 +12,13 @@ export interface SupportPolicy {
 /** Choices on an open order. Custom is a dollar amount for that order only. */
 export type OrderSupportChoice = 'custom' | 'percent' | 'remaining' | 'skip'
 
+/** Choice last applied to one order. Equal dollar amounts stay distinct. */
+export interface OrderChoiceMemory {
+  choice: OrderSupportChoice
+  percent: number
+  amount: number | null
+}
+
 export type SupportChoiceMode = SupportPolicy['mode'] | 'custom'
 
 export interface SubsidySnapshot {
@@ -275,12 +282,39 @@ export function customSupportSeed(currentFee: number, quote: SupportQuote): numb
   return currentFee
 }
 
+export function parseOrderChoiceMemory(value: unknown): OrderChoiceMemory | null {
+  if (!isRecord(value)) return null
+  const choice = field(value, 'choice')
+  if (choice !== 'custom' && choice !== 'percent' && choice !== 'remaining' && choice !== 'skip') {
+    return null
+  }
+  const percentValue = field(value, 'percent')
+  const percent =
+    typeof percentValue === 'number' && Number.isFinite(percentValue)
+      ? Math.round(percentValue)
+      : null
+  if (percent === null || percent < 0 || percent > MAX_SUPPORT_PERCENT) return null
+  const amountValue = field(value, 'amount')
+  if (amountValue === null) return { choice, percent, amount: null }
+  if (typeof amountValue !== 'number' || !Number.isFinite(amountValue)) return null
+  return { choice, percent, amount: roundMoney(amountValue) }
+}
+
 export function inferOrderSupport(
   policy: SupportPolicy,
   currentFee: number,
-  quote: SupportQuote
+  quote: SupportQuote,
+  pinned: OrderChoiceMemory | null = null
 ): { choice: OrderSupportChoice; percent: number; remember: boolean } {
   const percent = policy.percent
+  if (pinned !== null && pinnedChoiceFits(pinned, currentFee, quote)) {
+    const nextPercent = pinned.choice === 'percent' ? pinned.percent : percent
+    return {
+      choice: pinned.choice,
+      percent: nextPercent,
+      remember: orderChoiceMatchesPolicy(pinned.choice, nextPercent, policy),
+    }
+  }
   if (policy.mode === 'percent') {
     const quoted = quotedSupportFee('percent', percent, quote)
     if (quoted !== null && feesMatch(quoted, currentFee)) {
@@ -318,6 +352,19 @@ export function orderChoiceMatchesPolicy(
   if (choice === 'percent') return policy.mode === 'percent' && policy.percent === percent
   if (choice === 'custom') return false
   return policy.mode === choice
+}
+
+function pinnedChoiceFits(
+  pinned: OrderChoiceMemory,
+  currentFee: number,
+  quote: SupportQuote
+): boolean {
+  if (pinned.choice === 'custom') {
+    return pinned.amount !== null && feesMatch(pinned.amount, currentFee)
+  }
+  const quoted = quotedSupportFee(pinned.choice, pinned.percent, quote)
+  if (quoted === null) return pinned.amount !== null && feesMatch(pinned.amount, currentFee)
+  return feesMatch(quoted, currentFee)
 }
 
 export function parseSupportAmount(value: string): number | null {
@@ -358,23 +405,31 @@ export function subsidySnapshotFromDay(cap: unknown, orders: unknown): SubsidySn
   return subsidyRemainingForOrder(cap, orders, null)
 }
 
+/**
+ * Cap left for a support fee. Other orders keep the subsidy already on them.
+ * This meal takes the rest, up to its item subtotal, before any support fee.
+ * A meal that costs at least the cap leaves $0.
+ */
 export function subsidyRemainingForOrder(
   cap: unknown,
   orders: unknown,
-  placed: { id: string; subsidy: number } | null
+  placed: { id: string; itemsSubtotal: number } | null
 ): SubsidySnapshot | null {
   const parsedCap = readMoney(cap)
   if (parsedCap === null) return null
-  let used = placed?.subsidy ?? 0
+  let others = 0
   if (Array.isArray(orders)) {
     for (const item of orders) {
       if (!isRecord(item)) continue
       if (placed !== null && field(item, 'id') === placed.id) continue
       const subsidy = readMoney(field(item, 'subsidy'))
-      if (subsidy !== null) used += subsidy
+      if (subsidy !== null) others += subsidy
     }
   }
-  return { cap: parsedCap, remaining: roundMoney(Math.max(0, parsedCap - used)) }
+  const available = roundMoney(Math.max(0, parsedCap - others))
+  if (placed === null) return { cap: parsedCap, remaining: available }
+  const consumed = Math.min(available, roundMoney(Math.max(0, placed.itemsSubtotal)))
+  return { cap: parsedCap, remaining: roundMoney(Math.max(0, available - consumed)) }
 }
 
 export interface OrderMutation {
@@ -432,8 +487,8 @@ export function parsePlacedOrder(value: unknown): PlacedOrder | null {
 
 /**
  * Fee to send, or null when the placed order should be left alone.
- * Percentage ignores the subsidy. Remaining subsidy is the unused cap, or $0
- * when the day is maxed. None is always $0.
+ * Percentage ignores the subsidy. Remaining subsidy is the cap left after this
+ * meal takes its share, or $0 when the meal costs at least the cap. None is always $0.
  */
 export function desiredSupportFee(
   order: PlacedOrder,
