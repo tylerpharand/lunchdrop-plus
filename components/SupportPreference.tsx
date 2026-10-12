@@ -385,8 +385,8 @@ function Choice({
       }}
       className={
         bare
-          ? 'lunchbot-control flex w-full cursor-pointer items-start gap-3 rounded-xl text-left'
-          : `lunchbot-option lunchbot-control flex w-full cursor-pointer items-start gap-3 rounded-2xl border p-3 text-left transition-colors ${
+          ? 'lunchbot-control relative flex w-full cursor-pointer items-start gap-3 rounded-xl text-left'
+          : `lunchbot-option lunchbot-control relative flex w-full cursor-pointer items-start gap-3 rounded-2xl border p-3 text-left transition-colors ${
               selected
                 ? 'border-[#009900]/30 bg-[#009900]/10 hover:border-[#009900]/55 active:border-[#009900]'
                 : 'border-zinc-200 bg-white hover:border-zinc-400 active:border-zinc-500'
@@ -398,14 +398,22 @@ function Choice({
         <span className="block text-sm font-semibold text-zinc-900">{title}</span>
         <span className="mt-0.5 block text-sm leading-5 text-zinc-600">{detail}</span>
       </span>
-      {amount !== null || pending ? (
-        <span className="flex shrink-0 items-center">
-          <PriceStatus pending={pending} done={done} />
-          {amount !== null ? (
-            <span className="text-sm font-semibold tabular-nums text-zinc-900">{amount}</span>
-          ) : null}
+      {amount !== null ? (
+        <span className="relative shrink-0 self-start text-sm font-semibold tabular-nums text-zinc-900">
+          {amount}
+          <span className="pointer-events-none absolute top-full right-0 mt-0.5 flex h-5 items-center">
+            <PriceStatus pending={pending} done={done} />
+          </span>
         </span>
-      ) : null}
+      ) : (
+        <span
+          className={`pointer-events-none absolute top-0 flex h-5 items-center ${
+            bare ? 'right-0' : 'right-3'
+          }`}
+        >
+          <PriceStatus pending={pending} done={done} />
+        </span>
+      )}
     </button>
   )
 }
@@ -455,7 +463,7 @@ function PriceStatus({ pending, done }: { pending: boolean; done: number }): Rea
 
   return (
     <span
-      className="mr-1.5 grid h-3.5 w-3.5 place-items-center overflow-visible"
+      className="grid h-3.5 w-3.5 place-items-center overflow-visible"
       role="status"
       aria-label={showingCheck ? 'Support updated' : 'Updating this order'}
       data-lunchbot-support-pending={phase === 'spin' ? 'true' : undefined}
