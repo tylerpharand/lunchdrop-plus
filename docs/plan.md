@@ -26,9 +26,9 @@ Availability alerts are a separate project. Nothing in this repo signs in on the
 
 ## Extension
 
-**Support fee.** The order row is labeled "Support:". Clicking the price opens a modal titled "Support" instead of Lunchdrop's editor. The same preference is in the toolbar popup.
+**Support fee.** The order row is labeled "Support:". Clicking the price opens a modal titled "Support" instead of Lunchdrop's editor. The same preference is in the toolbar popup. That sheet stays on the visible viewport. Its width and height follow the visual viewport while the page scrolls and while the browser chrome collapses. A narrow viewport keeps it on the bottom edge. A wider viewport centers it.
 
-**Settings.** The toolbar popup is headed "Lunchdrop+" with the extension version in grey parentheses beside it, and groups settings into Support and UI tabs. A subdued GitHub mark at the right of that heading opens the public repository. Support is the fee preference. UI is a combobox to hide all, show all, or customize which of the reminder, rating, referral, and invite banners are hidden. Order updates stay visible. Nothing is hidden unless the user says so.
+**Settings.** The toolbar popup is headed "Lunchdrop+" with the extension version in grey parentheses beside it, and groups settings into Support and UI tabs. A subdued GitHub mark at the right of that heading opens the public repository. Support is the fee preference. UI is a combobox to hide all, show all, or customize which of the reminder, rating, referral, and invite banners are hidden. Order updates stay visible. Nothing is hidden unless the user says so. Long words in item descriptions wrap onto the next line. That wrap is on by default and can be turned off in the UI tab.
 
 **Browsers.** Chrome and Firefox on desktop. Firefox for Android can run extensions; Chrome on Android generally cannot.
 
@@ -42,4 +42,5 @@ Placing an order stays `POST /api/deliveries/{deliveryId}/order`. Editing an ite
 
 1. Support-fee preference in the popup and on the order page. Shipped.
 2. Hide reminder, rating, referral, and invite banners. Shipped.
-3. Leave availability alerts out of this repository.
+3. Wrap long words in item descriptions. Shipped.
+4. Leave availability alerts out of this repository.

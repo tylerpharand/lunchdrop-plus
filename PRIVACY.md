@@ -8,10 +8,11 @@ We do not collect user data. The extension has no account, no analytics, and no 
 
 ## Data stored on your device
 
-The extension saves two settings in the browser’s local storage:
+The extension saves these settings in the browser’s local storage:
 
 - The support amount you choose
 - Whether extra prompts are hidden
+- Whether long item descriptions wrap
 
 Those settings stay on your device. Uninstalling the extension removes them.
 

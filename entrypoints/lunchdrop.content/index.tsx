@@ -18,10 +18,17 @@ import {
   type HidePagePrompts,
 } from '../../lib/page-prompts'
 import { HIDE_PAGE_PROMPTS_STORAGE_KEY, readHidePagePrompts } from '../../lib/page-prompts-storage'
+import { bindVisualFrame } from '../../lib/visual-viewport'
+import { defaultWrapLongDescriptions, parseWrapLongDescriptions } from '../../lib/wrap-descriptions'
+import {
+  readWrapLongDescriptions,
+  WRAP_LONG_DESCRIPTIONS_STORAGE_KEY,
+} from '../../lib/wrap-descriptions-storage'
 import { browser } from 'wxt/browser'
 import PageApp from './App'
 import { ensurePromptStyles, removePromptStyles, syncMiscPrompts } from './page-prompts'
 import { injectSupportRow, removeSupportRow } from './support-row'
+import { removeWrapLongDescriptions, syncWrapLongDescriptions } from './wrap-descriptions'
 import './style.css'
 
 export default defineContentScript({
@@ -31,6 +38,7 @@ export default defineContentScript({
   async main(ctx) {
     let policy: SupportPolicy = { mode: 'default', percent: 10 }
     let hidePrompts: HidePagePrompts = defaultHidePagePrompts()
+    let wrapLongDescriptions = defaultWrapLongDescriptions()
     let observer: MutationObserver | null = null
 
     window.addEventListener('message', event => {
@@ -56,18 +64,20 @@ export default defineContentScript({
       css: ':host { position: relative !important; z-index: 2147483646 !important; width: 0 !important; height: 0 !important; }',
       onMount(container) {
         container.style.pointerEvents = 'none'
-        const mounted = createRoot(container)
-        mounted.render(
+        const stopFrame = bindVisualFrame(container)
+        const root = createRoot(container)
+        root.render(
           <PageApp
             onOpenChange={open => {
               container.style.pointerEvents = open ? 'auto' : 'none'
             }}
           />
         )
-        return mounted
+        return { root, stopFrame }
       },
       onRemove(mounted) {
-        mounted?.unmount()
+        mounted?.stopFrame()
+        mounted?.root.unmount()
       },
     })
 
@@ -78,9 +88,15 @@ export default defineContentScript({
         publishSupportPolicy(policy)
       }
       const promptChange = changes[HIDE_PAGE_PROMPTS_STORAGE_KEY]
-      if (promptChange === undefined) return
-      hidePrompts = parseHidePagePrompts(promptChange.newValue)
-      syncMiscPrompts(hidePrompts)
+      if (promptChange !== undefined) {
+        hidePrompts = parseHidePagePrompts(promptChange.newValue)
+        syncMiscPrompts(hidePrompts)
+      }
+      const wrapChange = changes[WRAP_LONG_DESCRIPTIONS_STORAGE_KEY]
+      if (wrapChange === undefined) return
+      wrapLongDescriptions = parseWrapLongDescriptions(wrapChange.newValue)
+      if (document.readyState === 'loading') return
+      syncWrapLongDescriptions(wrapLongDescriptions)
     })
 
     void readHidePagePrompts().then(value => {
@@ -88,8 +104,15 @@ export default defineContentScript({
       syncMiscPrompts(hidePrompts)
     })
 
+    void readWrapLongDescriptions().then(value => {
+      wrapLongDescriptions = value
+      if (document.readyState === 'loading') return
+      syncWrapLongDescriptions(wrapLongDescriptions)
+    })
+
     const start = (): void => {
       ensurePromptStyles()
+      syncWrapLongDescriptions(wrapLongDescriptions)
       injectSupportRow()
       syncMiscPrompts(hidePrompts)
       ui.mount()
@@ -113,6 +136,7 @@ export default defineContentScript({
       observer?.disconnect()
       removeSupportRow()
       removePromptStyles()
+      removeWrapLongDescriptions()
     })
   },
 })

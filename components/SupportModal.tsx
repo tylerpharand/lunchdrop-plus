@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { SupportChoiceMode } from '../lib/support-policy'
+import { isCompactViewport } from '../lib/visual-viewport'
+import { useCompactViewport } from './use-compact-viewport'
 import { SupportPreference, useSwitchMotion, type OrderPreferenceProps } from './SupportPreference'
 
 const DIALOG_MS = 200
 const SHEET_MS = 320
 
 function closeMotionMs(): number {
-  return window.matchMedia('(max-width: 639px)').matches ? SHEET_MS : DIALOG_MS
+  return isCompactViewport() ? SHEET_MS : DIALOG_MS
 }
 
 interface SupportModalProps extends Pick<
@@ -48,6 +50,7 @@ export function SupportModal({
   const closingRef = useRef(false)
   const closeTimer = useRef<number | null>(null)
   const [closing, setClosing] = useState(false)
+  const compact = useCompactViewport()
   const animateRemember = useSwitchMotion(showRemember)
 
   useEffect(() => {
@@ -119,13 +122,11 @@ export function SupportModal({
           from { translate: 0 0; }
           to { translate: 0 100%; }
         }
-        @media (max-width: 639px) {
-          .lunchbot-dialog-in {
-            animation: lunchbot-sheet-in ${String(SHEET_MS)}ms cubic-bezier(0.32, 0.72, 0, 1) both;
-          }
-          .lunchbot-dialog-out {
-            animation: lunchbot-sheet-out ${String(SHEET_MS)}ms cubic-bezier(0.32, 0.72, 0, 1) both;
-          }
+        .lunchbot-sheet.lunchbot-dialog-in {
+          animation: lunchbot-sheet-in ${String(SHEET_MS)}ms cubic-bezier(0.32, 0.72, 0, 1) both;
+        }
+        .lunchbot-sheet.lunchbot-dialog-out {
+          animation: lunchbot-sheet-out ${String(SHEET_MS)}ms cubic-bezier(0.32, 0.72, 0, 1) both;
         }
         @keyframes lunchbot-remember-in {
           from { opacity: 0; translate: 0 -0.5rem; }
@@ -148,6 +149,8 @@ export function SupportModal({
           .lunchbot-backdrop-out,
           .lunchbot-dialog-in,
           .lunchbot-dialog-out,
+          .lunchbot-sheet.lunchbot-dialog-in,
+          .lunchbot-sheet.lunchbot-dialog-out,
           .lunchbot-remember-in,
           .lunchbot-remember-out {
             animation: none;
@@ -170,7 +173,11 @@ export function SupportModal({
           requestClose('dismiss')
         }}
       />
-      <div className="pointer-events-none relative z-10 flex h-full items-end justify-center sm:items-center sm:p-6">
+      <div
+        className={`pointer-events-none relative z-10 flex h-full justify-center ${
+          compact ? 'items-end' : 'items-center p-6'
+        }`}
+      >
         <div
           ref={dialogRef}
           role="dialog"
@@ -182,9 +189,11 @@ export function SupportModal({
             event.stopPropagation()
             requestClose('dismiss')
           }}
-          className={`pointer-events-auto flex max-h-[92dvh] w-full flex-col overflow-y-auto rounded-t-3xl bg-white px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl outline-none! sm:max-h-[calc(100dvh-3rem)] sm:max-w-md sm:rounded-3xl sm:px-6 sm:py-4 ${
-            closing ? 'lunchbot-dialog-out' : 'lunchbot-dialog-in'
-          }`}
+          className={`pointer-events-auto flex w-full flex-col overflow-y-auto bg-white shadow-2xl outline-none! ${
+            compact
+              ? 'lunchbot-sheet max-h-[calc(var(--lunchbot-frame-height)*0.92)] rounded-t-3xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]'
+              : 'max-h-[calc(var(--lunchbot-frame-height)-3rem)] max-w-md rounded-3xl px-6 py-4'
+          } ${closing ? 'lunchbot-dialog-out' : 'lunchbot-dialog-in'}`}
         >
           <div className="mb-4">
             <h2 id="lunchbot-support-title" className="text-lg font-semibold tracking-tight">

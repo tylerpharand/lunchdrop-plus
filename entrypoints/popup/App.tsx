@@ -2,8 +2,10 @@ import { useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { browser } from 'wxt/browser'
 import { HidePromptsSetting } from '../../components/HidePromptsSetting'
 import { SupportPreference } from '../../components/SupportPreference'
+import { WrapDescriptionsSetting } from '../../components/WrapDescriptionsSetting'
 import { useHidePagePrompts } from '../../components/use-hide-page-prompts'
 import { useSupportPolicy } from '../../components/use-support-policy'
+import { useWrapLongDescriptions } from '../../components/use-wrap-long-descriptions'
 
 const extensionVersion = browser.runtime.getManifest().version
 
@@ -17,6 +19,7 @@ type PopupTab = (typeof TABS)[number]['id']
 export default function App(): ReactElement {
   const { policy, setPolicy } = useSupportPolicy()
   const { preference, setPreference } = useHidePagePrompts()
+  const { wrapLongDescriptions, setWrapLongDescriptions } = useWrapLongDescriptions()
   const [tab, setTab] = useState<PopupTab>('support')
   const tabRefs = useRef(new Map<PopupTab, HTMLButtonElement>())
 
@@ -111,7 +114,13 @@ export default function App(): ReactElement {
           </>
         ) : null}
         {tab === 'ui' ? (
-          <HidePromptsSetting preference={preference} onChange={setPreference} />
+          <>
+            <HidePromptsSetting preference={preference} onChange={setPreference} />
+            <WrapDescriptionsSetting
+              enabled={wrapLongDescriptions}
+              onChange={setWrapLongDescriptions}
+            />
+          </>
         ) : null}
       </div>
     </main>
