@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root'
 import {
+  defaultSupportPolicy,
   isPolicyRequestMessage,
   parseSupportPolicy,
   supportOriginFromMessage,
@@ -52,6 +53,8 @@ import {
 } from '../../lib/restaurant-tile-details-storage'
 import { defaultHideNewBadges, parseHideNewBadges } from '../../lib/new-badges'
 import { HIDE_NEW_BADGES_STORAGE_KEY, readHideNewBadges } from '../../lib/new-badges-storage'
+import { defaultHideTooltips, parseHideTooltips } from '../../lib/hide-tooltips'
+import { HIDE_TOOLTIPS_STORAGE_KEY, readHideTooltips } from '../../lib/hide-tooltips-storage'
 import { defaultStickyDatePicker, parseStickyDatePicker } from '../../lib/sticky-date-picker'
 import {
   readStickyDatePicker,
@@ -62,18 +65,45 @@ import {
   COMBINED_SIGN_IN_STORAGE_KEY,
   readCombinedSignIn,
 } from '../../lib/combined-sign-in-storage'
+import {
+  defaultCollapsePickupInstructions,
+  parseCollapsePickupInstructions,
+} from '../../lib/collapse-pickup-instructions'
+import {
+  defaultSimplifiedOrderSummary,
+  parseSimplifiedOrderSummary,
+} from '../../lib/simplified-order-summary'
+import {
+  readSimplifiedOrderSummary,
+  SIMPLIFIED_ORDER_SUMMARY_STORAGE_KEY,
+} from '../../lib/simplified-order-summary-storage'
+import {
+  COLLAPSE_PICKUP_INSTRUCTIONS_STORAGE_KEY,
+  readCollapsePickupInstructions,
+} from '../../lib/collapse-pickup-instructions-storage'
+import { defaultExtensionEnabled, parseExtensionEnabled } from '../../lib/extension-enabled'
+import {
+  EXTENSION_ENABLED_STORAGE_KEY,
+  readExtensionEnabled,
+} from '../../lib/extension-enabled-storage'
 import { browser } from 'wxt/browser'
 import PageApp from './App'
 import { removeEvenRestaurantCards, syncEvenRestaurantCards } from './even-restaurant-cards'
 import { removeHideNewBadges, syncHideNewBadges } from './new-badges'
+import { removeHideTooltips, syncHideTooltips } from './hide-tooltips'
 import { removeStickyDatePicker, syncStickyDatePicker } from './sticky-date-picker'
 import { removeCombinedSignIn, syncCombinedSignIn } from './combined-sign-in'
+import {
+  removeCollapsePickupInstructions,
+  syncCollapsePickupInstructions,
+} from './pickup-instructions'
 import { removeRestaurantTileDetails, syncRestaurantTileDetails } from './restaurant-tile-details'
 import {
   ensureOrderSummaryStyles,
   removeOrderSummaryStyles,
   syncOrderSummary,
 } from './order-summary'
+import { removeOrderFooter, syncOrderFooter } from './order-footer'
 import { ensurePromptStyles, removePromptStyles, syncMiscPrompts } from './page-prompts'
 import {
   injectSupportRow,
@@ -84,18 +114,33 @@ import {
 import { removeWrapLongDescriptions, syncWrapLongDescriptions } from './wrap-descriptions'
 import './style.css'
 
+const loadedStorageKeys = new Set<string>()
+
+function storageLoaded(key: string): boolean {
+  return loadedStorageKeys.has(key)
+}
+
 function watchStored<T>(
   storageKey: string,
   parse: (value: unknown) => T,
   read: () => Promise<T>,
   apply: (value: T) => void
 ): void {
+  const remember = (value: T): void => {
+    loadedStorageKeys.add(storageKey)
+    apply(value)
+  }
   browser.storage.onChanged.addListener(changes => {
     const change = changes[storageKey]
     if (change === undefined) return
-    apply(parse(change.newValue))
+    remember(parse(change.newValue))
   })
-  void read().then(apply)
+  void read().then(remember)
+}
+
+interface MountedPageUi {
+  mount: () => void
+  remove: () => void
 }
 
 export default defineContentScript({
@@ -104,34 +149,183 @@ export default defineContentScript({
   runAt: 'document_start',
   async main(ctx) {
     let policy: SupportPolicy = { mode: 'default', percent: 10 }
+    let enabled = defaultExtensionEnabled()
     let hidePrompts: HidePagePrompts = defaultHidePagePrompts()
     let hideOrderSummary: HideOrderSummary = defaultHideOrderSummary()
     let wrapLongDescriptions = defaultWrapLongDescriptions()
     let evenRestaurantCards = defaultEvenRestaurantCards()
     let restaurantTileDetails: RestaurantTileDetails = defaultRestaurantTileDetails()
     let hideNewBadges = defaultHideNewBadges()
+    let hideTooltips = defaultHideTooltips()
     let stickyDatePicker = defaultStickyDatePicker()
     let combinedSignIn = defaultCombinedSignIn()
+    let collapsePickupInstructions = defaultCollapsePickupInstructions()
+    let simplifiedOrderSummary = defaultSimplifiedOrderSummary()
     let observer: MutationObserver | null = null
-    const stopOverrideMarks = startSupportOverrideMarks()
+    let stopOverrideMarks: (() => void) | null = null
+    let pageStarted = false
+    let pageUi: MountedPageUi | null = null
+
+    function pageActive(): boolean {
+      return storageLoaded(EXTENSION_ENABLED_STORAGE_KEY) && enabled
+    }
+
+    function publishActivePolicy(): void {
+      if (!storageLoaded(EXTENSION_ENABLED_STORAGE_KEY)) return
+      if (!enabled) {
+        publishSupportPolicy(defaultSupportPolicy())
+        return
+      }
+      if (!storageLoaded(SUPPORT_POLICY_STORAGE_KEY)) return
+      publishSupportPolicy(policy)
+    }
+
+    function applySimplifiedOrder(): void {
+      if (!pageActive()) return
+      if (
+        storageLoaded(SIMPLIFIED_ORDER_SUMMARY_STORAGE_KEY) &&
+        storageLoaded(HIDE_ORDER_SUMMARY_STORAGE_KEY)
+      ) {
+        ensureOrderSummaryStyles()
+        syncOrderSummary(
+          simplifiedOrderSummary ? hideOrderSummary : { mode: 'show-all', hidden: [] }
+        )
+      }
+      if (storageLoaded(SIMPLIFIED_ORDER_SUMMARY_STORAGE_KEY)) {
+        syncOrderFooter(simplifiedOrderSummary)
+      }
+      if (
+        storageLoaded(SIMPLIFIED_ORDER_SUMMARY_STORAGE_KEY) &&
+        storageLoaded(COLLAPSE_PICKUP_INSTRUCTIONS_STORAGE_KEY)
+      ) {
+        syncCollapsePickupInstructions(simplifiedOrderSummary && collapsePickupInstructions)
+      }
+    }
+
+    function syncEarlyFeatures(): void {
+      if (!pageActive()) return
+      if (storageLoaded(COMBINED_SIGN_IN_STORAGE_KEY)) syncCombinedSignIn(combinedSignIn)
+      if (storageLoaded(RESTAURANT_TILE_DETAILS_STORAGE_KEY)) {
+        syncRestaurantTileDetails(restaurantTileDetails)
+      }
+      if (storageLoaded(HIDE_NEW_BADGES_STORAGE_KEY)) syncHideNewBadges(hideNewBadges)
+      if (storageLoaded(STICKY_DATE_PICKER_STORAGE_KEY)) syncStickyDatePicker(stickyDatePicker)
+      if (storageLoaded(HIDE_PAGE_PROMPTS_STORAGE_KEY)) {
+        ensurePromptStyles()
+        syncMiscPrompts(hidePrompts)
+      }
+      applySimplifiedOrder()
+    }
+
+    function syncStableFeatures(): void {
+      if (!pageActive() || document.readyState === 'loading') return
+      if (storageLoaded(WRAP_LONG_DESCRIPTIONS_STORAGE_KEY)) {
+        syncWrapLongDescriptions(wrapLongDescriptions)
+      }
+      if (storageLoaded(EVEN_RESTAURANT_CARDS_STORAGE_KEY)) {
+        syncEvenRestaurantCards(evenRestaurantCards)
+      }
+      if (storageLoaded(HIDE_TOOLTIPS_STORAGE_KEY)) syncHideTooltips(hideTooltips)
+    }
+
+    function syncObserved(): void {
+      if (!pageActive() || !pageStarted) return
+      observer?.disconnect()
+      ensurePromptStyles()
+      ensureOrderSummaryStyles()
+      injectSupportRow()
+      if (storageLoaded(HIDE_PAGE_PROMPTS_STORAGE_KEY)) syncMiscPrompts(hidePrompts)
+      if (storageLoaded(RESTAURANT_TILE_DETAILS_STORAGE_KEY)) {
+        syncRestaurantTileDetails(restaurantTileDetails)
+      }
+      if (storageLoaded(HIDE_NEW_BADGES_STORAGE_KEY)) syncHideNewBadges(hideNewBadges)
+      if (storageLoaded(STICKY_DATE_PICKER_STORAGE_KEY)) syncStickyDatePicker(stickyDatePicker)
+      if (storageLoaded(COMBINED_SIGN_IN_STORAGE_KEY)) syncCombinedSignIn(combinedSignIn)
+      applySimplifiedOrder()
+      refreshSupportOverrideMarks()
+      if (!pageActive() || observer === null) return
+      observer.observe(document.body, { childList: true, subtree: true })
+    }
+
+    function startPage(): void {
+      if (pageUi === null || !pageActive() || document.readyState === 'loading') return
+      if (!pageStarted) {
+        pageStarted = true
+        pageUi.mount()
+        stopOverrideMarks = startSupportOverrideMarks()
+        observer = new MutationObserver(() => {
+          syncObserved()
+        })
+      }
+      syncStableFeatures()
+      syncObserved()
+    }
+
+    function stopPage(): void {
+      observer?.disconnect()
+      observer = null
+      stopOverrideMarks?.()
+      stopOverrideMarks = null
+      if (pageStarted) {
+        pageStarted = false
+        pageUi?.remove()
+      }
+      removeSupportRow()
+      removePromptStyles()
+      removeOrderSummaryStyles()
+      removeWrapLongDescriptions()
+      removeEvenRestaurantCards()
+      removeRestaurantTileDetails()
+      removeHideNewBadges()
+      removeHideTooltips()
+      removeStickyDatePicker()
+      removeCombinedSignIn()
+      removeCollapsePickupInstructions()
+      removeOrderFooter()
+    }
+
+    function applyEnabledState(): void {
+      publishActivePolicy()
+      if (!storageLoaded(EXTENSION_ENABLED_STORAGE_KEY)) return
+      if (!enabled) {
+        stopPage()
+        return
+      }
+      syncStableFeatures()
+      if (document.readyState === 'loading' || pageUi === null) {
+        syncEarlyFeatures()
+        return
+      }
+      startPage()
+    }
 
     window.addEventListener('message', event => {
       if (event.source !== window) return
-      if (isPolicyRequestMessage(event.data)) publishSupportPolicy(policy)
+      if (isPolicyRequestMessage(event.data)) publishActivePolicy()
       const origin = supportOriginFromMessage(event.data)
       if (origin === null) return
       void rememberSupportOrigin(origin.orderId, origin.supportFee, origin.replace).then(() => {
+        if (!pageActive()) return
         refreshSupportOverrideMarks()
       })
     })
 
-    const publishStored = (next: SupportPolicy): void => {
+    watchStored(SUPPORT_POLICY_STORAGE_KEY, parseSupportPolicy, readSupportPolicy, next => {
       policy = next
-      publishSupportPolicy(next)
-    }
-    watchStored(SUPPORT_POLICY_STORAGE_KEY, parseSupportPolicy, readSupportPolicy, publishStored)
+      publishActivePolicy()
+    })
+    watchStored(
+      EXTENSION_ENABLED_STORAGE_KEY,
+      parseExtensionEnabled,
+      readExtensionEnabled,
+      value => {
+        enabled = value
+        applyEnabledState()
+      }
+    )
     watchStored(COMBINED_SIGN_IN_STORAGE_KEY, parseCombinedSignIn, readCombinedSignIn, value => {
       combinedSignIn = value
+      if (!pageActive()) return
       syncCombinedSignIn(combinedSignIn)
     })
 
@@ -163,6 +357,8 @@ export default defineContentScript({
 
     watchStored(HIDE_PAGE_PROMPTS_STORAGE_KEY, parseHidePagePrompts, readHidePagePrompts, value => {
       hidePrompts = value
+      if (!pageActive()) return
+      ensurePromptStyles()
       syncMiscPrompts(hidePrompts)
     })
 
@@ -172,7 +368,7 @@ export default defineContentScript({
       readHideOrderSummary,
       value => {
         hideOrderSummary = value
-        syncOrderSummary(hideOrderSummary)
+        applySimplifiedOrder()
       }
     )
 
@@ -182,7 +378,7 @@ export default defineContentScript({
       readWrapLongDescriptions,
       value => {
         wrapLongDescriptions = value
-        if (document.readyState === 'loading') return
+        if (!pageActive() || document.readyState === 'loading') return
         syncWrapLongDescriptions(wrapLongDescriptions)
       }
     )
@@ -193,7 +389,7 @@ export default defineContentScript({
       readEvenRestaurantCards,
       value => {
         evenRestaurantCards = value
-        if (document.readyState === 'loading') return
+        if (!pageActive() || document.readyState === 'loading') return
         syncEvenRestaurantCards(evenRestaurantCards)
       }
     )
@@ -204,13 +400,21 @@ export default defineContentScript({
       readRestaurantTileDetails,
       value => {
         restaurantTileDetails = value
+        if (!pageActive()) return
         syncRestaurantTileDetails(restaurantTileDetails)
       }
     )
 
     watchStored(HIDE_NEW_BADGES_STORAGE_KEY, parseHideNewBadges, readHideNewBadges, value => {
       hideNewBadges = value
+      if (!pageActive()) return
       syncHideNewBadges(hideNewBadges)
+    })
+
+    watchStored(HIDE_TOOLTIPS_STORAGE_KEY, parseHideTooltips, readHideTooltips, value => {
+      hideTooltips = value
+      if (!pageActive() || document.readyState === 'loading') return
+      syncHideTooltips(hideTooltips)
     })
 
     watchStored(
@@ -219,57 +423,53 @@ export default defineContentScript({
       readStickyDatePicker,
       value => {
         stickyDatePicker = value
+        if (!pageActive()) return
         syncStickyDatePicker(stickyDatePicker)
       }
     )
 
-    const start = (): void => {
-      ensurePromptStyles()
-      ensureOrderSummaryStyles()
-      syncWrapLongDescriptions(wrapLongDescriptions)
-      syncEvenRestaurantCards(evenRestaurantCards)
-      syncRestaurantTileDetails(restaurantTileDetails)
-      syncHideNewBadges(hideNewBadges)
-      syncStickyDatePicker(stickyDatePicker)
-      syncCombinedSignIn(combinedSignIn)
-      injectSupportRow()
-      syncMiscPrompts(hidePrompts)
-      syncOrderSummary(hideOrderSummary)
-      ui.mount()
-      const syncPage = (): void => {
-        observer?.disconnect()
-        injectSupportRow()
-        syncMiscPrompts(hidePrompts)
-        syncOrderSummary(hideOrderSummary)
-        syncRestaurantTileDetails(restaurantTileDetails)
-        syncHideNewBadges(hideNewBadges)
-        syncStickyDatePicker(stickyDatePicker)
-        syncCombinedSignIn(combinedSignIn)
-        refreshSupportOverrideMarks()
-        observer?.observe(document.body, { childList: true, subtree: true })
+    watchStored(
+      COLLAPSE_PICKUP_INSTRUCTIONS_STORAGE_KEY,
+      parseCollapsePickupInstructions,
+      readCollapsePickupInstructions,
+      value => {
+        collapsePickupInstructions = value
+        applySimplifiedOrder()
       }
-      observer = new MutationObserver(syncPage)
-      syncPage()
-    }
+    )
+
+    watchStored(
+      SIMPLIFIED_ORDER_SUMMARY_STORAGE_KEY,
+      parseSimplifiedOrderSummary,
+      readSimplifiedOrderSummary,
+      value => {
+        simplifiedOrderSummary = value
+        applySimplifiedOrder()
+      }
+    )
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', start, { once: true })
-    } else {
-      start()
+      document.addEventListener(
+        'DOMContentLoaded',
+        () => {
+          applyEnabledState()
+        },
+        { once: true }
+      )
     }
 
+    pageUi = {
+      mount: () => {
+        ui.mount()
+      },
+      remove: () => {
+        ui.remove()
+      },
+    }
+    applyEnabledState()
+
     ctx.onInvalidated(() => {
-      observer?.disconnect()
-      stopOverrideMarks()
-      removeSupportRow()
-      removePromptStyles()
-      removeOrderSummaryStyles()
-      removeWrapLongDescriptions()
-      removeEvenRestaurantCards()
-      removeRestaurantTileDetails()
-      removeHideNewBadges()
-      removeStickyDatePicker()
-      removeCombinedSignIn()
+      stopPage()
     })
   },
 })

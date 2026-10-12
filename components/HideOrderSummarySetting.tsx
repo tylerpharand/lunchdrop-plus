@@ -13,21 +13,23 @@ import { SettingSwitch } from './SettingSwitch'
 interface HideOrderSummarySettingProps {
   preference: HideOrderSummary
   onChange: (preference: HideOrderSummary) => void
+  nested?: boolean
 }
 
 export function HideOrderSummarySetting({
   preference,
   onChange,
+  nested = false,
 }: HideOrderSummarySettingProps): ReactElement {
   const hidden = hiddenOrderActionIds(preference)
   return (
-    <div className="mt-6 border-t border-zinc-200 pt-4">
+    <div className={nested ? '' : 'mt-6 border-t border-zinc-200 pt-4'}>
       <label className="block text-sm font-semibold text-zinc-900" htmlFor="hide-order-summary">
-        Order summary
+        {nested ? 'Footer options' : 'Order summary'}
       </label>
       <p className="mt-0.5 text-sm leading-5 text-zinc-600">
         Add more items, a promo code or gift card, removing the subsidy, and the info icons beside
-        each breakdown row. Cancel stays.
+        each breakdown row.
       </p>
       <ModeSelect
         id="hide-order-summary"

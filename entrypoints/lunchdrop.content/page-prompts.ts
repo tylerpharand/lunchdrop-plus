@@ -2,8 +2,22 @@ import { hiddenPromptIds, pagePromptIdFromText, type HidePagePrompts } from '../
 
 const STYLE_ID = 'lunchbot-page-prompts'
 const HIDDEN_ATTR = 'data-lunchbot-hidden-prompt'
+const ORDER_PLACED_ATTR = 'data-lunchbot-order-placed-banner'
 
-const PROMPT_CSS = `[${HIDDEN_ATTR}="true"] { display: none !important; }`
+const PROMPT_CSS = `
+[${HIDDEN_ATTR}="true"] { display: none !important; }
+[${ORDER_PLACED_ATTR}="true"] {
+  border: 1px solid rgb(0 0 0 / 15%) !important;
+  border-radius: 13px !important;
+  padding: 10px !important;
+  background: white !important;
+  box-shadow: rgba(0, 0, 0, 0.1) 0px 2px 5px !important;
+}
+[${ORDER_PLACED_ATTR}="true"] > .flex {
+  align-items: center !important;
+  justify-content: center !important;
+}
+`
 
 export function ensurePromptStyles(): void {
   if (document.getElementById(STYLE_ID) !== null) return
@@ -18,6 +32,9 @@ export function removePromptStyles(): void {
   for (const hidden of document.querySelectorAll(`[${HIDDEN_ATTR}="true"]`)) {
     hidden.removeAttribute(HIDDEN_ATTR)
   }
+  for (const placed of document.querySelectorAll(`[${ORDER_PLACED_ATTR}="true"]`)) {
+    placed.removeAttribute(ORDER_PLACED_ATTR)
+  }
 }
 
 export function syncMiscPrompts(preference: HidePagePrompts): void {
@@ -31,6 +48,11 @@ export function syncMiscPrompts(preference: HidePagePrompts): void {
       continue
     }
     if (host.getAttribute(HIDDEN_ATTR) === 'true') host.removeAttribute(HIDDEN_ATTR)
+    if (banner.textContent.includes('Order placed at')) {
+      banner.setAttribute(ORDER_PLACED_ATTR, 'true')
+    } else if (banner.getAttribute(ORDER_PLACED_ATTR) === 'true') {
+      banner.removeAttribute(ORDER_PLACED_ATTR)
+    }
   }
 }
 

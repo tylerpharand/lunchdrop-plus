@@ -1,20 +1,28 @@
 import { useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { browser } from 'wxt/browser'
+import { CollapsePickupInstructionsSetting } from '../../components/CollapsePickupInstructionsSetting'
 import { CombinedSignInSetting } from '../../components/CombinedSignInSetting'
 import { EvenRestaurantCardsSetting } from '../../components/EvenRestaurantCardsSetting'
 import { HideNewBadgesSetting } from '../../components/HideNewBadgesSetting'
+import { HideTooltipsSetting } from '../../components/HideTooltipsSetting'
 import { StickyDatePickerSetting } from '../../components/StickyDatePickerSetting'
 import { HideOrderSummarySetting } from '../../components/HideOrderSummarySetting'
+import { SimplifiedOrderSummarySetting } from '../../components/SimplifiedOrderSummarySetting'
 import { HidePromptsSetting } from '../../components/HidePromptsSetting'
 import { RestaurantTileDetailsSetting } from '../../components/RestaurantTileDetailsSetting'
 import { SupportPreference } from '../../components/SupportPreference'
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 import { WrapDescriptionsSetting } from '../../components/WrapDescriptionsSetting'
+import { useExtensionEnabled } from '../../components/use-extension-enabled'
+import { useCollapsePickupInstructions } from '../../components/use-collapse-pickup-instructions'
 import { useCombinedSignIn } from '../../components/use-combined-sign-in'
 import { useEvenRestaurantCards } from '../../components/use-even-restaurant-cards'
 import { useHideNewBadges } from '../../components/use-hide-new-badges'
+import { useHideTooltips } from '../../components/use-hide-tooltips'
 import { useStickyDatePicker } from '../../components/use-sticky-date-picker'
 import { useRestaurantTileDetails } from '../../components/use-restaurant-tile-details'
 import { useHideOrderSummary } from '../../components/use-hide-order-summary'
+import { useSimplifiedOrderSummary } from '../../components/use-simplified-order-summary'
 import { useHidePagePrompts } from '../../components/use-hide-page-prompts'
 import { useSupportPolicy } from '../../components/use-support-policy'
 import { useWrapLongDescriptions } from '../../components/use-wrap-long-descriptions'
@@ -29,14 +37,19 @@ const TABS = [
 type PopupTab = (typeof TABS)[number]['id']
 
 export default function App(): ReactElement {
+  const { extensionEnabled, setExtensionEnabled } = useExtensionEnabled()
   const { policy, setPolicy } = useSupportPolicy()
   const { preference, setPreference } = useHidePagePrompts()
   const { preference: orderSummary, setPreference: setOrderSummary } = useHideOrderSummary()
+  const { simplifiedOrderSummary, setSimplifiedOrderSummary } = useSimplifiedOrderSummary()
   const { wrapLongDescriptions, setWrapLongDescriptions } = useWrapLongDescriptions()
   const { evenRestaurantCards, setEvenRestaurantCards } = useEvenRestaurantCards()
   const { hideNewBadges, setHideNewBadges } = useHideNewBadges()
+  const { hideTooltips, setHideTooltips } = useHideTooltips()
   const { stickyDatePicker, setStickyDatePicker } = useStickyDatePicker()
   const { combinedSignIn, setCombinedSignIn } = useCombinedSignIn()
+  const { collapsePickupInstructions, setCollapsePickupInstructions } =
+    useCollapsePickupInstructions()
   const { details: restaurantTileDetails, setDetails: setRestaurantTileDetails } =
     useRestaurantTileDetails()
   const [tab, setTab] = useState<PopupTab>('support')
@@ -64,10 +77,28 @@ export default function App(): ReactElement {
 
   return (
     <main className="bg-white p-4 font-sans text-zinc-900 antialiased">
-      <header className="flex items-center justify-between">
-        <h1 className="text-base font-bold tracking-tight text-[#009900]">
-          Lunchdrop+ <span className="font-normal text-zinc-400">({extensionVersion})</span>
-        </h1>
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={extensionEnabled}
+            aria-label="Enable Lunchdrop+"
+            onClick={() => {
+              setExtensionEnabled(!extensionEnabled)
+            }}
+            className="-ml-1 shrink-0 cursor-pointer rounded-full p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#009900]"
+          >
+            <ToggleSwitch on={extensionEnabled} size="sm" />
+          </button>
+          <h1
+            className={`truncate text-base font-bold tracking-tight ${
+              extensionEnabled ? 'text-[#009900]' : 'text-zinc-400'
+            }`}
+          >
+            Lunchdrop+ <span className="font-normal text-zinc-400">({extensionVersion})</span>
+          </h1>
+        </div>
         <a
           href="https://github.com/tylerpharand/lunchdrop-plus"
           target="_blank"
@@ -135,7 +166,21 @@ export default function App(): ReactElement {
         {tab === 'ui' ? (
           <>
             <HidePromptsSetting preference={preference} onChange={setPreference} />
-            <HideOrderSummarySetting preference={orderSummary} onChange={setOrderSummary} />
+            <SimplifiedOrderSummarySetting
+              enabled={simplifiedOrderSummary}
+              onChange={setSimplifiedOrderSummary}
+            >
+              <CollapsePickupInstructionsSetting
+                nested
+                enabled={collapsePickupInstructions}
+                onChange={setCollapsePickupInstructions}
+              />
+              <HideOrderSummarySetting
+                nested
+                preference={orderSummary}
+                onChange={setOrderSummary}
+              />
+            </SimplifiedOrderSummarySetting>
             <WrapDescriptionsSetting
               enabled={wrapLongDescriptions}
               onChange={setWrapLongDescriptions}
@@ -151,6 +196,7 @@ export default function App(): ReactElement {
               }}
             />
             <HideNewBadgesSetting enabled={hideNewBadges} onChange={setHideNewBadges} />
+            <HideTooltipsSetting enabled={hideTooltips} onChange={setHideTooltips} />
             <StickyDatePickerSetting enabled={stickyDatePicker} onChange={setStickyDatePicker} />
             <CombinedSignInSetting enabled={combinedSignIn} onChange={setCombinedSignIn} />
           </>

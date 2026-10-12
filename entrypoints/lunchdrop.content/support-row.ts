@@ -50,6 +50,7 @@ let marks: SupportOverrideMarks = {
   precise: new Set(),
   blocked: new Set(),
 }
+let openRequests: AbortController | null = null
 let generation = 0
 let refreshTimer: number | null = null
 let liveSupportChoice: { orderId: string; choice: OrderSupportChoice } | null = null
@@ -110,6 +111,7 @@ export function refreshSupportOverrideMarks(): void {
 }
 
 export function removeSupportRow(): void {
+  releaseOpenRequests()
   document.getElementById(STYLE_ID)?.remove()
   for (const id of LEGACY_STYLE_IDS) document.getElementById(id)?.remove()
   for (const node of document.querySelectorAll(
@@ -127,6 +129,20 @@ export function removeSupportRow(): void {
     if (!(label instanceof HTMLElement)) continue
     delete label.dataset['lunchbotSupportOverridden']
   }
+  for (const row of document.querySelectorAll('tr[data-lunchbot-support-row="true"]')) {
+    if (!(row instanceof HTMLTableRowElement)) continue
+    restoreSupportLabel(row)
+    delete row.dataset['lunchbotSupportRow']
+  }
+  for (const cell of document.querySelectorAll('[data-lunchbot-support-nowrap="true"]')) {
+    if (!(cell instanceof HTMLElement)) continue
+    cell.style.whiteSpace = ''
+    delete cell.dataset['lunchbotSupportNowrap']
+  }
+  for (const element of document.querySelectorAll('[data-lunchbot-support-open="true"]')) {
+    if (!(element instanceof HTMLElement) && !(element instanceof SVGElement)) continue
+    delete element.dataset['lunchbotSupportOpen']
+  }
 }
 
 export function injectSupportRow(): void {
@@ -139,6 +155,7 @@ export function injectSupportRow(): void {
     if (link === null) continue
     const cell = link.parentElement
     if (cell instanceof HTMLTableCellElement && cell.style.whiteSpace !== 'nowrap') {
+      cell.dataset['lunchbotSupportNowrap'] = 'true'
       cell.style.whiteSpace = 'nowrap'
     }
     bindOpen(link, link)
@@ -181,6 +198,16 @@ function amountLink(row: HTMLTableRowElement): HTMLAnchorElement | null {
   const link = row.querySelector('a.border-dashed')
   if (!(link instanceof HTMLAnchorElement) || !link.textContent.includes('$')) return null
   return link
+}
+
+function restoreSupportLabel(row: HTMLTableRowElement): void {
+  const label = row.querySelector('div.cursor-pointer')
+  if (label === null) return
+  for (const node of label.childNodes) {
+    if (node.nodeType !== Node.TEXT_NODE || node.textContent === null) continue
+    if (!node.textContent.includes(SUPPORT_LABEL)) continue
+    node.textContent = node.textContent.replace(SUPPORT_LABEL, ORIGINAL_LABEL)
+  }
 }
 
 function rewriteSupportLabel(row: HTMLTableRowElement): void {
@@ -301,6 +328,16 @@ function bindOpen(element: HTMLElement | SVGElement, link: HTMLAnchorElement): v
       event.stopImmediatePropagation()
       openSupportModal(link.textContent)
     },
-    true
+    { capture: true, signal: openSignal() }
   )
+}
+
+function openSignal(): AbortSignal {
+  openRequests ??= new AbortController()
+  return openRequests.signal
+}
+
+function releaseOpenRequests(): void {
+  openRequests?.abort()
+  openRequests = null
 }
